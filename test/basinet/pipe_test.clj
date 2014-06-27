@@ -5,8 +5,8 @@
 
 (defmacro with-pipe [[source sink] & body]
   `(let [p# (b/pipe)]
-     (with-open [~source (.source p#)
-                 ~sink (.sink p#)]
+     (with-open [~source (b/source p#)
+                 ~sink (b/sink p#)]
        ~@body)))
 
 (deftest making-pipe
@@ -21,6 +21,25 @@
     (?throws (b/pop r) java.nio.channels.ClosedChannelException)
     (.close w)
     (?throws (b/push w (byte 10)) java.nio.channels.ClosedChannelException)))
+
+(deftest can-close-entire-pipe
+  (let [p (b/pipe)]
+    (b/close p)
+    (?false (b/open? p))
+    (?false (b/open? (b/source p)))
+    (?false (b/open? (b/sink p)))))
+
+(deftest pipe-is-open-if-reader-or-writer-is-open
+  (let [p (b/pipe)]
+    (b/close (b/source p))
+    (?true (b/open? p))
+    (b/close (b/sink p))
+    (?false (b/open? p)))
+  (let [p (b/pipe)]
+    (b/close (b/sink p))
+    (?true (b/open? p))
+    (b/close (b/source p))
+    (?false (b/open? p))))
 
 (deftest pushing-and-popping-for-pipe
   (with-pipe [r w]

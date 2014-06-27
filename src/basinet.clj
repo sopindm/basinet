@@ -1,6 +1,12 @@
 (ns basinet
-  (:refer-clojure :exclude [pop])
-  (:import [basinet Pipe]))
+  (:refer-clojure :exclude [pop]))
+
+;;
+;; Basic channel functions
+;;
+
+(defn open? [channel] (.isOpen channel))
+(defn close [channel] (.close channel))
 
 ;;
 ;; Basic stream functions
@@ -17,10 +23,13 @@
 (defn try-pop [source] (option->nullable (.tryPop source)))
 
 ;;
-;; Misc
+;; Sockets
 ;; 
 
-(defn pipe [] (Pipe.))
+(defn source [socket] (.source socket))
+(defn sink [socket] (.sink socket))
+
+(defn pipe [] (.apply basinet.Pipe$/MODULE$))
 
 
   

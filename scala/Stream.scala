@@ -1,6 +1,6 @@
 package basinet
 
-import java.nio.channels.{Pipe => NIOPipe}
+import java.nio.channels.SelectableChannel
 
 trait Stream extends java.io.Closeable {
   def isOpen: Boolean
@@ -49,40 +49,16 @@ trait SinkLike[T] extends Sink[T] {
   }
 }
 
-class PipeSource(val source: NIOPipe.SourceChannel) extends SourceLike[Byte] {
-  override def isOpen = source.isOpen
-  override def close = source.close
-
-  override def tryPop = {
-    val buffer = java.nio.ByteBuffer.allocate(1)
-    buffer.position(0).limit(1)
-
-    source.read(buffer)
-
-    if(buffer.position != 0) Some[Byte](buffer.get(0)) else None
-  }
+trait Socket[T] extends Stream {
+  def source: Source[T]
+  def sink: Sink[T]
 }
 
-class PipeSink(val sink: NIOPipe.SinkChannel) extends SinkLike[Byte] {
-  override def isOpen = sink.isOpen
-  override def close = sink.close
-
-  override def tryPush(value: Byte) = {
-    val buffer = java.nio.ByteBuffer.allocate(1)
-    buffer.put(value)
-
-    buffer.position(0).limit(1)
-    sink.write(buffer)
-
-    buffer.position != 0
-  }
+class SocketOf[T](override val source: Source[T], override val sink: Sink[T]) extends Socket[T]{
+  override def isOpen = source.isOpen || sink.isOpen
+  override def close { source.close; sink.close }
 }
 
-class Pipe {
-  private[this] val pipe = NIOPipe.open
-  pipe.source.configureBlocking(false)
-  pipe.sink.configureBlocking(false)
-  
-  def source = new PipeSource(pipe.source)
-  def sink = new PipeSink(pipe.sink)
+object SocketOf {
+  def apply[T](source: Source[T], sink: Sink[T]) = new SocketOf[T](source, sink)
 }
