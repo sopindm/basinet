@@ -16,13 +16,65 @@
       (?true (instance? Socket ssocket))
       (?true (instance? Socket csocket)))))
 
-;; reading from acceptor/connector returns socket (pair of channels)
-;; tryPop for empty acceptor/connector
-;; connecting to wrong address gets error
-;; accepting several times
-;; successful connector is closed
-;; connector/acceptor have address/remote address
-;; connector/acceptor with IPv6
+(deftest popping-from-empty-acceptor-and-connector
+  (with-open [a (tcp/acceptor "localhost" 12345 :backlog 1)]
+    (?= (b/try-pop a) nil)
+    (let [connectors (repeatedly 5 #(tcp/connector "localhost" 12345))
+          sockets (doall (map #(b/try-pop %) connectors))]
+      (?true (some nil? sockets))
+      (doseq [c connectors] (.close c))
+      (doseq [s sockets :when (not (nil? s))] (.close s)))))
+    
+(deftest connecting-to-wrong-address-error
+  (?throws (b/try-pop (tcp/connector "localhost" 11111)) java.net.ConnectException))
+
+(deftest closing-acceptor
+  (with-tcp [a c]
+    (.close a)
+    (?false (b/open? a))
+    (?throws (b/try-pop a) java.nio.channels.ClosedChannelException)))
+
+(deftest closing-connector
+  (with-tcp [a c]
+    (.close c)
+    (?false (b/open? c))
+    (?throws (b/try-pop c) java.nio.channels.ClosedChannelException)))
+
+(deftest accepting-several-times
+  (with-tcp [a c]
+    (with-open [s (b/try-pop a)] (?false (nil? s)))
+    (with-open [c (tcp/connector "localhost" 12345)]
+      (with-open [s (b/try-pop a)] (?false (nil? s))))))
+
+(deftest successful-connector-is-closed
+  (with-tcp [a c]
+    (with-open [s (b/try-pop c)])
+    (?false (b/open? c))))
+
+(defmacro call-or-nil [field expr]
+  `(if ~expr (~field ~expr)))
+
+(defmacro ?address= [expr [local-host local-port local-ip] [remote-host remote-port remote-ip]]
+  `(let [expr# ~expr]
+     (let [local-address# (tcp/local-address expr#)]
+       (?= (call-or-nil .host local-address#) ~local-host)
+       (?= (call-or-nil .port local-address#) ~local-port)
+       (?= (call-or-nil .ip local-address#) ~local-ip))
+     (let [remote-address# (tcp/remote-address expr#)]
+       (?= (call-or-nil .host remote-address#) ~remote-host)
+       (?= (call-or-nil .port remote-address#) ~remote-port)
+       (?= (call-or-nil .ip remote-address#) ~remote-ip))))
+
+(deftest connector-and-acceptor-addresses
+  (with-open [a (tcp/acceptor "127.0.0.1" 12345)
+              c (tcp/connector "127.0.0.1" 12345)]
+    (?address= a ["localhost" 12345 "127.0.0.1"] nil)
+    (?address= c nil ["localhost" 12345 "127.0.0.1"]))
+  (with-open [a (tcp/acceptor "::1" 12345)
+              c (tcp/connector "::1" 12345 :local-host "::1" :local-port 23456)]
+    (?address= a ["ip6-localhost" 12345 "0:0:0:0:0:0:0:1"] ["ip6-localhost" 23456 "0:0:0:0:0:0:0:1"])
+    (?address= c ["ip6-localhost" 23456 "0:0:0:0:0:0:0:1"] ["ip6-localhost" 12345 "0:0:0:0:0:0:0:1"])))
+
 ;; connect/accept function (make connector/acceptor, accept/connect, close acceptor/connector, return result)
 ;; cannot read from closed acceptor and connector
 

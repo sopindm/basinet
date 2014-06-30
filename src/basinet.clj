@@ -1,4 +1,5 @@
 (ns basinet
+  (:require [basinet.scala :as scala])
   (:refer-clojure :exclude [pop]))
 
 ;;
@@ -12,15 +13,13 @@
 ;; Basic stream functions
 ;;
 
-(defn- option->nullable [option] (if (not (.isEmpty option)) (.get option)))
-
 (defn push [sink item] (.push sink item))
 (defn push-in [sink item milliseconds] (.pushIn sink item milliseconds))
 (defn try-push [sink item] (.tryPush sink item))
 
 (defn pop [source] (.pop source))
-(defn pop-in [source milliseconds] (option->nullable (.popIn source milliseconds)))
-(defn try-pop [source] (option->nullable (.tryPop source)))
+(defn pop-in [source milliseconds] (scala/option->nullable (.popIn source milliseconds)))
+(defn try-pop [source] (scala/option->nullable (.tryPop source)))
 
 ;;
 ;; Sockets

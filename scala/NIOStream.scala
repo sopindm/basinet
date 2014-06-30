@@ -49,21 +49,56 @@ object TcpSocket {
   def apply(channel: SocketChannel) = SocketOf(new NIOByteSource(channel), new NIOByteSink(channel))
 }
 
-class TcpAcceptor(channel: ServerSocketChannel)
-    extends NIOSource[Socket[Byte]](channel) {
+trait TcpAddress {
+  def host: String
+  def port: Int
+  def ip: String
+}
+
+object TcpAddress {
+  def apply(address: java.net.SocketAddress) = address match {
+    case inet: java.net.InetSocketAddress => new TcpAddress {
+      override def host = inet.getHostName
+      override def port = inet.getPort
+      override def ip = inet.getAddress.getHostAddress
+    }
+    case _ => throw new IllegalArgumentException
+  }
+}
+
+trait TcpAddressable {
+  def localAddress: scala.Option[TcpAddress]
+  def remoteAddress: scala.Option[TcpAddress]
+}
+
+class TcpAcceptor(channel: ServerSocketChannel) 
+    extends NIOSource[Socket[Byte]](channel) with TcpAddressable {
   override def tryPop = {
     val socket = channel.accept
 
     if(socket != null) Some(TcpSocket(socket)) else None
   }
+
+  override def localAddress = Some(TcpAddress(channel.getLocalAddress))
+  override def remoteAddress = None
 }
 
 class TcpConnector(channel: SocketChannel, remote: SocketAddress)
-    extends NIOSource[Socket[Byte]](channel) {
+    extends NIOSource[Socket[Byte]](channel) with TcpAddressable {
   var connected = channel.connect(remote)
 
   override def tryPop = {
     if(!connected) connected = channel.finishConnect()
     if(connected) Some(TcpSocket(channel)) else None
+  }
+
+  override def localAddress = {
+    val address = channel.getLocalAddress
+    if(address != null) Some(TcpAddress(address)) else None
+  }
+
+  override def remoteAddress = {
+    val address = channel.getRemoteAddress
+    if(address != null) Some(TcpAddress(address)) else None
   }
 }
