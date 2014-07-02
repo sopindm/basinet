@@ -65,8 +65,10 @@
        (?= (call-or-nil .port remote-address#) ~remote-port)
        (?= (call-or-nil .ip remote-address#) ~remote-ip))))
 
+(defn- localhost [] (.getHostName (java.net.InetAddress/getLocalHost)))
+
 (deftest connector-and-acceptor-addresses
-  (let [hostname (.getHostName (java.net.InetAddress/getLocalHost))]
+  (let [hostname (localhost)]
     (with-open [a (tcp/acceptor "127.0.0.1" 12345)
                 c (tcp/connector "127.0.0.1" 12345)]
       (?address= a [hostname 12345 "127.0.0.1"] nil)
@@ -105,9 +107,34 @@
 ;; Tcp sockets
 ;;
 
-;; tcp socket is a pair of NIOByteSource, NIOByteSink
-;; closing is OK (can close read end and leave writing end working
-;; have address/remote address
+(deftest tcp-socket-sink-and-source-types
+  (with-tcp [a c]
+    (with-open [s (b/pop c)]
+      (?true (instance? basinet.NIOByteSource (.source s)))
+      (?true (instance? basinet.NIOByteSink (.sink s))))
+    (with-open [s (b/pop a)]
+      (?true (instance? basinet.NIOByteSource (.source s)))
+      (?true (instance? basinet.NIOByteSink (.sink s))))))
+
+(deftest closing-tcp-socket-sink-and-source
+  (with-tcp [a c]
+    (with-open [s (b/pop c)]
+      (.close (b/sink s))
+      (?true (b/open? (b/source s)))
+      (.close (b/source s))
+      (?false (b/open? s)))
+    (with-open [s (b/pop a)]
+      (.close (b/source s))
+      (?true (b/open? (b/sink s))))))
+
+(deftest tcp-sockets-have-address-and-remote-address
+  (with-open [acceptor (tcp/acceptor "localhost" 12345)
+              connector (tcp/connector "localhost" 12345 :local-host "localhost" :local-port 23456)]
+    (with-open [s (b/pop acceptor)]
+      (?address= s [(localhost) 12345 "127.0.0.1"] [(localhost) 23456 "127.0.0.1"])
+      (?address= (b/source s) [(localhost) 12345 "127.0.0.1"] [(localhost) 23456 "127.0.0.1"])
+      (?address= (b/sink s) [(localhost) 12345 "127.0.0.1"] [(localhost) 23456 "127.0.0.1"]))))
+
 
 
   

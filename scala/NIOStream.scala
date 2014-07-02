@@ -45,10 +45,6 @@ object Pipe {
   }
 }
 
-object TcpSocket {
-  def apply(channel: SocketChannel) = SocketOf(new NIOByteSource(channel), new NIOByteSink(channel))
-}
-
 trait TcpAddress {
   def host: String
   def port: Int
@@ -69,6 +65,52 @@ object TcpAddress {
 trait TcpAddressable {
   def localAddress: scala.Option[TcpAddress]
   def remoteAddress: scala.Option[TcpAddress]
+}
+
+class TcpSocket(channel: java.nio.channels.SocketChannel) extends Socket[Byte] with TcpAddressable {
+  self: TcpSocket =>
+
+  private[this] var _readable = true
+  private[this] var _writable = true
+
+  override def close { channel.close }
+  override def isOpen = channel.isOpen
+
+  override def localAddress = { val address = channel.getLocalAddress
+    if(address != null) Some(TcpAddress(address)) else None
+  }
+
+  override def remoteAddress =  { val address = channel.getRemoteAddress
+    if(address != null) Some(TcpAddress(address)) else None
+  }
+
+  override def source = new NIOByteSource(channel) with TcpAddressable {
+    override def isOpen = _readable
+
+    override def close {
+      _readable = false
+      if(!_writable) channel.close
+    }
+
+    override def localAddress = self.localAddress
+    override def remoteAddress = self.remoteAddress
+  }
+
+  override def sink = new NIOByteSink(channel) with TcpAddressable {
+    override def isOpen = _writable
+
+    override def close {
+      _writable = false
+      if(!_readable) channel.close
+    }
+
+    override def localAddress = self.localAddress
+    override def remoteAddress = self.remoteAddress
+  }
+}
+
+object TcpSocket {
+  def apply(channel: SocketChannel) = new TcpSocket(channel)
 }
 
 class TcpAcceptor(channel: ServerSocketChannel) 
