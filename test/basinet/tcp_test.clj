@@ -66,17 +66,40 @@
        (?= (call-or-nil .ip remote-address#) ~remote-ip))))
 
 (deftest connector-and-acceptor-addresses
-  (with-open [a (tcp/acceptor "127.0.0.1" 12345)
-              c (tcp/connector "127.0.0.1" 12345)]
-    (?address= a ["localhost" 12345 "127.0.0.1"] nil)
-    (?address= c nil ["localhost" 12345 "127.0.0.1"]))
+  (let [hostname (.getHostName (java.net.InetAddress/getLocalHost))]
+    (with-open [a (tcp/acceptor "127.0.0.1" 12345)
+                c (tcp/connector "127.0.0.1" 12345)]
+      (?address= a [hostname 12345 "127.0.0.1"] nil)
+      (?address= c nil [hostname 12345 "127.0.0.1"]))
   (with-open [a (tcp/acceptor "::1" 12345)
               c (tcp/connector "::1" 12345 :local-host "::1" :local-port 23456)]
-    (?address= a ["ip6-localhost" 12345 "0:0:0:0:0:0:0:1"] ["ip6-localhost" 23456 "0:0:0:0:0:0:0:1"])
-    (?address= c ["ip6-localhost" 23456 "0:0:0:0:0:0:0:1"] ["ip6-localhost" 12345 "0:0:0:0:0:0:0:1"])))
+    (?address= a ["ip6-localhost" 12345 "0:0:0:0:0:0:0:1"] nil)
+    (?address= c ["ip6-localhost" 23456 "0:0:0:0:0:0:0:1"] ["ip6-localhost" 12345 "0:0:0:0:0:0:0:1"]))))
 
-;; connect/accept function (make connector/acceptor, accept/connect, close acceptor/connector, return result)
-;; cannot read from closed acceptor and connector
+(deftest connect-function
+  (with-open [acceptor (tcp/acceptor "localhost" 12345)]
+    (with-open [socket (tcp/connect "localhost" 12345 :local-host "localhost" :local-port 23456)]
+      (?true (instance? Socket socket)))))
+
+(deftest cannot-read-from-closed-acceptor
+  (let [acceptor (tcp/acceptor "localhost" 12345)]
+    (.close acceptor)
+    (?throws (b/try-pop acceptor) java.nio.channels.ClosedChannelException)))
+
+(deftest cannot-read-from-closed-connector
+  (with-tcp [a c]
+    (.close c)
+    (?throws (b/try-pop c) java.nio.channels.ClosedChannelException)))
+
+(deftest connector-closes-on-success
+  (with-tcp [a c]
+    (with-open [s (b/pop c)]
+      (?false (b/open? c))
+      (?true (b/open? s))))
+  (with-tcp [a c]
+    (with-open [s (b/pop c)]
+      (.close c)
+      (?true (b/open? s)))))
 
 ;;
 ;; Tcp sockets
@@ -87,3 +110,4 @@
 ;; have address/remote address
 
 
+  

@@ -6,7 +6,7 @@ import java.net._
 class NIOStream(channel: SelectableChannel) extends Stream {
   channel.configureBlocking(false)
 
-  override def close { channel.close }
+  override def close { if(isOpen) channel.close }
   override def isOpen = channel.isOpen
 }
 
@@ -86,10 +86,13 @@ class TcpAcceptor(channel: ServerSocketChannel)
 class TcpConnector(channel: SocketChannel, remote: SocketAddress)
     extends NIOSource[Socket[Byte]](channel) with TcpAddressable {
   var connected = channel.connect(remote)
+  var read = false
+
+  override def isOpen = !read && super.isOpen
 
   override def tryPop = {
     if(!connected) connected = channel.finishConnect()
-    if(connected) Some(TcpSocket(channel)) else None
+    if(connected) { read = true; Some(TcpSocket(channel)) } else None
   }
 
   override def localAddress = {
