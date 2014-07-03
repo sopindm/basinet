@@ -15,11 +15,14 @@ abstract class NIOSink[T](channel: SelectableChannel) extends NIOStream(channel)
 
 class NIOByteSource[T <: ReadableByteChannel with SelectableChannel](channel: T)
     extends NIOSource[Byte](channel) {
+  protected def eof() { close() }
+
   override def tryPop = {
     val buffer = java.nio.ByteBuffer.allocate(1)
     buffer.position(0).limit(1)
 
-    channel.read(buffer)
+    val read = channel.read(buffer)
+    if(read == -1) eof()
 
     if(buffer.position != 0) Some[Byte](buffer.get(0)) else None
   }
@@ -30,7 +33,7 @@ class NIOByteSink[T <: WritableByteChannel with SelectableChannel](channel: T)
   override def tryPush(value: Byte) = {
     val buffer = java.nio.ByteBuffer.allocate(1)
     buffer.put(value)
-
+ 
     buffer.position(0).limit(1)
     channel.write(buffer)
 
@@ -70,7 +73,11 @@ trait TcpAddressable {
 class TcpSocket(channel: java.nio.channels.SocketChannel) extends Socket[Byte] with TcpAddressable {
   self: TcpSocket =>
 
+  channel.setOption[java.lang.Boolean](java.net.StandardSocketOptions.TCP_NODELAY, true)
+
+  @volatile
   private[this] var _readable = true
+  @volatile
   private[this] var _writable = true
 
   override def close { channel.close }
@@ -84,20 +91,22 @@ class TcpSocket(channel: java.nio.channels.SocketChannel) extends Socket[Byte] w
     if(address != null) Some(TcpAddress(address)) else None
   }
 
-  override def source = new NIOByteSource(channel) with TcpAddressable {
-    override def isOpen = _readable
+  override val source = new NIOByteSource(channel) with TcpAddressable {
+    override def isOpen = self.isOpen && _readable
 
     override def close {
       _readable = false
       if(!_writable) channel.close
     }
 
+    override def eof { channel.close }
+
     override def localAddress = self.localAddress
     override def remoteAddress = self.remoteAddress
   }
 
-  override def sink = new NIOByteSink(channel) with TcpAddressable {
-    override def isOpen = _writable
+  override val sink = new NIOByteSink(channel) with TcpAddressable {
+    override def isOpen = self.isOpen && _writable
 
     override def close {
       _writable = false

@@ -25,7 +25,9 @@ trait SourceLike[T] extends Source[T] {
     var result = tryPop
     val startTime = System.currentTimeMillis
 
-    while(result.isEmpty && System.currentTimeMillis < startTime + milliseconds) result = tryPop
+    while(result.isEmpty && System.currentTimeMillis < startTime + milliseconds && isOpen)
+      result = tryPop
+
     result
   }
 }

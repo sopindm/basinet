@@ -135,6 +135,27 @@
       (?address= (b/source s) [(localhost) 12345 "127.0.0.1"] [(localhost) 23456 "127.0.0.1"])
       (?address= (b/sink s) [(localhost) 12345 "127.0.0.1"] [(localhost) 23456 "127.0.0.1"]))))
 
+(deftest closing-one-sockets-end-closes-another
+  (with-tcp [a c]
+    (with-open [client (b/pop c)
+                server (b/pop a)]
+      (-> client b/close)
+      (?= (-> server b/source b/try-pop) nil)
+      (?false (-> server b/source b/open?))
+      (?false (-> server b/sink b/open?))))
+  (with-tcp [a c]
+    (b/close (b/pop a))
+    (with-open [client (b/pop c)]
+      (?= (-> client b/source (b/pop-in 1000)) nil)
+      (?false (-> client b/source b/open?))
+      (?false (-> client b/sink b/open?))))
+  (with-tcp [a c]
+    (b/close (b/pop a))
+    (with-open [client (b/pop c)]
+      (?throws (b/pop (b/source client)) java.nio.channels.ClosedChannelException)
+      (?false (-> client b/source b/open?))
+      (?false (-> client b/sink b/open?)))))
 
-
-  
+      
+      
+      
