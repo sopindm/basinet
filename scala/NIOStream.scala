@@ -2,6 +2,7 @@ package basinet
 
 import java.nio.channels.{Pipe => NIOPipe, _}
 import java.net._
+import scala.annotation.tailrec
 
 class NIOChannel(channel: SelectableChannel) extends Channel {
   channel.configureBlocking(false)
@@ -19,18 +20,26 @@ class NIOByteSource[T <: ReadableByteChannel with SelectableChannel](channel: T)
     extends NIOSource[Byte](channel) {
   protected def eof() { close() }
 
-  override def tryPop = {
-    val buffer = java.nio.ByteBuffer.allocate(1)
-    buffer.position(0).limit(1)
+  override def tryPop = { 
+    val buffer = ByteBuffer(1)
+    if(read(buffer) != 0) Some[Byte](buffer.pop) else None
+  }
 
-    val read = channel.read(buffer)
-    if(read == -1) eof()
+  @tailrec
+  private[this] def read(buffer: ByteBuffer, readBefore: Int): Int = {
+    if(!buffer.sink.pushable) return readBefore
 
-    if(buffer.position != 0) Some[Byte](buffer.get(0)) else None
+    val readNow = channel.read(buffer.sink.buffer)
+    if(readNow == -1) { eof; return readBefore }
+    if(readNow == 0) return readBefore
+
+    buffer.sink.compact
+    buffer.source.expand(readNow)
+    read(buffer, readBefore + readNow)
   }
 
   override def read(buffer: Buffer[Byte]) = buffer match {
-    case bb: ByteBuffer => { val read = channel.read(bb.sink.buffer); bb.source.expand(read); read }
+    case bb: ByteBuffer => read(bb, 0)
     case _ => super.read(buffer)
   }
 }
@@ -38,21 +47,26 @@ class NIOByteSource[T <: ReadableByteChannel with SelectableChannel](channel: T)
 class NIOByteSink[T <: WritableByteChannel with SelectableChannel](channel: T)
     extends NIOSink[Byte](channel) {
   override def tryPush(value: Byte) = {
-    val buffer = java.nio.ByteBuffer.allocate(1)
-    buffer.put(value)
- 
-    buffer.position(0).limit(1)
-    channel.write(buffer)
+    val buffer = ByteBuffer(1)
+    buffer.push(value)
 
-    buffer.position != 0
+    write(buffer) == 1
+  }
+
+  @tailrec
+  private[this] def write(buffer: ByteBuffer, writenBefore: Int): Int = {
+    if(!buffer.source.poppable) return writenBefore
+    
+    val writen = channel.write(buffer.source.buffer)
+    if(writen == 0) return writenBefore
+
+    buffer.source.compact
+    buffer.sink.expand(writen)
+    write(buffer, writenBefore + writen)
   }
 
   override def write(buffer: Buffer[Byte]) = buffer match {
-    case bb: ByteBuffer => {
-      val writen = channel.write(bb.source.buffer)
-      //bb.sink.expand(writen)
-      writen
-    }
+    case bb: ByteBuffer => write(bb, 0)
     case _ => super.write(buffer)
   }
 }

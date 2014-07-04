@@ -41,8 +41,27 @@
     (dotimes [i 8] (b/push buffer (byte i)))
     (dotimes [i 8] (?= (b/pop buffer) i))))
 
-;;buffers are circular
-;;;circular reads/writes
+(deftest writing-from-buffer-circular
+  (let [buffer (b/byte-buffer 10)]
+    (dotimes [i 7] (b/push buffer (byte 0)))
+    (dotimes [i 7] (b/pop buffer))
+    (dotimes [i 9] (b/push buffer (byte (* 3 i))))
+    (with-open [pipe (b/pipe)]
+      (?= (b/write (b/sink pipe) buffer) 9)
+      (dotimes [i 9] (?= (b/pop (b/source pipe)) (* i 3))))
+    (?= (b/size (b/source buffer)) 0)
+    (?= (b/size (b/sink buffer)) 10)))
+
+(deftest reading-to-buffer-circular
+  (with-open [pipe (b/pipe)]
+    (dotimes [i 7] (b/push (b/sink pipe) (byte (* i i))))
+    (let [buffer (b/byte-buffer 10)]
+      (dotimes [i 8] (b/push buffer (byte 0)))
+      (dotimes [i 8] (b/pop buffer))
+      (?= (b/read (b/source pipe) buffer) 7)
+      (?= (b/size (b/source buffer)) 7)
+      (?= (b/size (b/sink buffer)) 3)
+      (dotimes [i 7] (?= (b/pop buffer) (byte (* i i)))))))
 
 ;;buffer has sink and source
 ;;buffer has capacity, size and free space

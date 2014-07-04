@@ -29,15 +29,15 @@ abstract class Buffer[T] extends Source[T] with Sink[T] {
   override def tryPush(value: T) =
     if(sink.tryPush(value)) { source.expand(1); true } else false
 
-  override def pop = { val result = source.pop; /*sink.expand(1);*/ result }
+  override def pop = { val result = source.pop; sink.expand(1); result }
 
   override def popIn(milliseconds: Int) = source.popIn(milliseconds) match {
-    case result@Some(_) => { /*sink.expand(1);*/ result }
+    case result@Some(_) => { sink.expand(1); result }
     case None => None
   }
 
   override def tryPop = source.tryPop match {
-    case result@Some(_) => { /*sink.expand(1);*/ result }
+    case result@Some(_) => { sink.expand(1); result }
     case None => None
   }
 }
@@ -46,12 +46,21 @@ class NIOBuffered(buffer: java.nio.Buffer) extends Buffered {
   private[this] var tail = 0
   override def size = buffer.limit - buffer.position + tail
 
-  override def drop(n: Int) = buffer.position(buffer.position + n)
+  override def drop(n: Int) = if(buffer.position + n >= buffer.capacity) {
+    val newSize = size - n
+    buffer.position(buffer.position + n - buffer.capacity)
+    buffer.limit(buffer.position + newSize)
+    tail = 0
+  }
+  else buffer.position(buffer.position + n)
+
   override def expand(n: Int) = {
-    val inc = scala.math.min(buffer.size, buffer.limit + n)
+    val inc = scala.math.min(buffer.capacity - buffer.limit, n)
     buffer.limit(buffer.limit + inc)
     tail += n - inc
   }
+
+  def compact = if(buffer.position == buffer.limit) drop(0)
 }
 
 class ByteBuffer(buffer: java.nio.ByteBuffer) extends Buffer[Byte] {
@@ -61,11 +70,19 @@ class ByteBuffer(buffer: java.nio.ByteBuffer) extends Buffer[Byte] {
 
   override val source = new ByteBuffered(buffer.duplicate) with BufferedSource[Byte] {
     buffer.position(0)
-    override def tryPop = if(poppable) Some(buffer.get) else None
+    override def tryPop = if(poppable) {val value = Some(buffer.get); compact; value } else None
   }
 
   override val sink = new ByteBuffered(buffer.duplicate) with BufferedSink[Byte] {
     buffer.position(self.buffer.limit).limit(self.buffer.capacity)
-    override def tryPush(value: Byte) = if(pushable) { buffer.put(value); true } else false
+    override def tryPush(value: Byte) = if(pushable) { buffer.put(value); compact; true } else false
+  }
+}
+
+object ByteBuffer {
+  def apply(n: Int) = {
+    val buffer = java.nio.ByteBuffer.allocate(n)
+    buffer.limit(0)
+    new ByteBuffer(buffer) 
   }
 }
