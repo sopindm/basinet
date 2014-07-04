@@ -33,11 +33,20 @@
       (?= (b/write (b/sink pipe) buffer) 10)
       (dotimes [i 10] (?= (b/pop (b/source pipe)) i)))))
 
+(deftest buffers-are-circular
+  (let [buffer (b/byte-buffer 10)]
+    (dotimes [i 8] (b/push buffer (byte i)))
+    (dotimes [i 8] (?= (b/pop buffer) i))
+    (?= (-> buffer b/sink b/size) 10)
+    (dotimes [i 8] (b/push buffer (byte i)))
+    (dotimes [i 8] (?= (b/pop buffer) i))))
+
 ;;buffers are circular
+;;;circular reads/writes
+
 ;;buffer has sink and source
 ;;buffer has capacity, size and free space
 ;;direct buffers
-
 ;;read/write covariance/contravariance
 
 ;;default write implementation for buffers

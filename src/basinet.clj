@@ -30,8 +30,8 @@
 ;; Sockets
 ;; 
 
-(defn ^basinet.Source source [^basinet.Socket socket] (.source socket))
-(defn ^basinet.Sink sink [^basinet.Socket socket] (.sink socket))
+(defn ^basinet.Source source [socket] (.source socket))
+(defn ^basinet.Sink sink [socket] (.sink socket))
 
 (defn pipe [] (.apply basinet.Pipe$/MODULE$))
 
@@ -39,6 +39,8 @@
 ;; Buffers
 ;;
   
+(defn size [buffered] (.size buffered))
+
 (defn byte-buffer [size-or-coll]
   (let [buffer (if (integer? size-or-coll)
                  (ByteBuffer/allocate size-or-coll)

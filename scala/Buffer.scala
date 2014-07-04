@@ -43,10 +43,15 @@ abstract class Buffer[T] extends Source[T] with Sink[T] {
 }
 
 class NIOBuffered(buffer: java.nio.Buffer) extends Buffered {
-  override def size = buffer.limit - buffer.position
+  private[this] var tail = 0
+  override def size = buffer.limit - buffer.position + tail
 
   override def drop(n: Int) = buffer.position(buffer.position + n)
-  override def expand(n: Int) = buffer.limit(buffer.limit + n)
+  override def expand(n: Int) = {
+    val inc = scala.math.min(buffer.size, buffer.limit + n)
+    buffer.limit(buffer.limit + inc)
+    tail += n - inc
+  }
 }
 
 class ByteBuffer(buffer: java.nio.ByteBuffer) extends Buffer[Byte] {
