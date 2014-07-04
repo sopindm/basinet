@@ -1,4 +1,4 @@
 (ns basinet.scala)
 
-(defn option->nullable [option] (if (not (.isEmpty option)) (.get option)))
+(defn option->nullable [^scala.Option option] (if (not (.isEmpty option)) (.get option)))
 

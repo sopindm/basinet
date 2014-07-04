@@ -55,7 +55,7 @@
 
 (deftest trying-to-push-and-to-pop-for-pipe
   (with-pipe [r w]
-    (?= (b/try-push w 123) true)
+    (?= (b/try-push w (byte 123)) true)
     (?= (b/try-pop r) 123)))
 
 (deftest popping-from-empty-pipe

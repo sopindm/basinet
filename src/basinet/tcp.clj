@@ -1,25 +1,27 @@
 (ns basinet.tcp
   (:require [basinet.scala :as scala])
-  (:import [basinet TcpAcceptor TcpConnector]
+  (:import [basinet TcpAcceptor TcpConnector TcpAddressable TcpSocket]
            [java.net InetSocketAddress]
            [java.nio.channels SocketChannel ServerSocketChannel]))
 
-(defn acceptor [address port & {:keys [backlog]}]
+(defn ^TcpAcceptor acceptor [address port & {:keys [backlog]}]
   (let [channel (ServerSocketChannel/open)
-        address (InetSocketAddress. address port)]
+        address (InetSocketAddress. ^String address ^int port)]
     (if backlog (.bind channel address backlog) (.bind channel address))
     (TcpAcceptor. channel)))
 
-(defn connector [address port & {:keys [local-host local-port]}]
+(defn ^TcpConnector connector [address port & {:keys [local-host local-port]}]
   (let [channel (SocketChannel/open)]
     (when (and local-host local-port)
-      (.bind channel (java.net.InetSocketAddress. local-host local-port)))
-  (TcpConnector. channel (InetSocketAddress. address port))))
+      (.bind channel (java.net.InetSocketAddress. ^String local-host ^int local-port)))
+  (TcpConnector. channel (InetSocketAddress. ^String address ^int port))))
     
-(defn connect [address port & {:keys [local-host local-port]}]
-  (with-open [connector (connector address port :local-host local-host :local-port local-port)]
+(defn ^TcpSocket connect [address port & {:keys [local-host local-port]}]
+  (with-open [connector (connector address port
+                                   :local-host ^String local-host
+                                   :local-port ^String local-port)]
     (basinet/pop connector)))
 
-(defn local-address [channel] (scala/option->nullable (.localAddress channel)))
-(defn remote-address [channel] (scala/option->nullable (.remoteAddress channel)))
+(defn local-address [^TcpAddressable channel] (scala/option->nullable (.localAddress channel)))
+(defn remote-address [^TcpAddressable channel] (scala/option->nullable (.remoteAddress channel)))
   

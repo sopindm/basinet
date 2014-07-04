@@ -3,15 +3,17 @@ package basinet
 import java.nio.channels.{Pipe => NIOPipe, _}
 import java.net._
 
-class NIOStream(channel: SelectableChannel) extends Stream {
+class NIOChannel(channel: SelectableChannel) extends Channel {
   channel.configureBlocking(false)
 
   override def close { if(isOpen) channel.close }
   override def isOpen = channel.isOpen
 }
 
-abstract class NIOSource[T](channel: SelectableChannel) extends NIOStream(channel) with SourceLike[T]
-abstract class NIOSink[T](channel: SelectableChannel) extends NIOStream(channel) with SinkLike[T]
+abstract class NIOSource[T](channel: SelectableChannel) extends NIOChannel(channel)
+    with SourceChannelLike[T]
+abstract class NIOSink[T](channel: SelectableChannel) extends NIOChannel(channel)
+    with SinkChannelLike[T]
 
 class NIOByteSource[T <: ReadableByteChannel with SelectableChannel](channel: T)
     extends NIOSource[Byte](channel) {
@@ -26,6 +28,11 @@ class NIOByteSource[T <: ReadableByteChannel with SelectableChannel](channel: T)
 
     if(buffer.position != 0) Some[Byte](buffer.get(0)) else None
   }
+
+  override def read(buffer: Buffer[Byte]) = buffer match {
+    case bb: ByteBuffer => { val read = channel.read(bb.sink.buffer); bb.source.expand(read); read }
+    case _ => super.read(buffer)
+  }
 }
 
 class NIOByteSink[T <: WritableByteChannel with SelectableChannel](channel: T)
@@ -38,6 +45,15 @@ class NIOByteSink[T <: WritableByteChannel with SelectableChannel](channel: T)
     channel.write(buffer)
 
     buffer.position != 0
+  }
+
+  override def write(buffer: Buffer[Byte]) = buffer match {
+    case bb: ByteBuffer => {
+      val writen = channel.write(bb.source.buffer)
+      //bb.sink.expand(writen)
+      writen
+    }
+    case _ => super.write(buffer)
   }
 }
 
