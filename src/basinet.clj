@@ -1,6 +1,6 @@
 (ns basinet
   (:require [basinet.scala :as scala])
-  (:refer-clojure :exclude [pop read])
+  (:refer-clojure :exclude [pop read drop get set])
   (:import [java.nio ByteBuffer]))
 
 ;;
@@ -39,6 +39,9 @@
 ;; Buffers
 ;;
   
+(defn drop [n buffered] (.drop buffered n))
+(defn expand [n buffered] (.expand buffered n))
+
 (defn size [^basinet.Buffered buffered] (.size buffered))
 
 (defn byte-buffer [size-or-coll]
@@ -48,3 +51,5 @@
     (when (integer? size-or-coll) (.limit buffer 0))
     (basinet.ByteBuffer. buffer)))
 
+(defn get [buffer index] (.get buffer index))
+(defn set [buffer index value] (.set buffer index value))

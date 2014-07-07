@@ -63,7 +63,25 @@
       (?= (b/size (b/sink buffer)) 3)
       (dotimes [i 7] (?= (b/pop buffer) (byte (* i i)))))))
 
-;;buffer has sink and source
+(deftest random-access-for-buffers
+  (let [b (b/byte-buffer 10)]
+    (dotimes [i 7] (b/push b (byte i)))
+    (dotimes [i 7] (?= (b/get b i) i))
+    (dotimes [i 3] (b/set b i (byte i)))
+    (b/expand 3 (b/source b))
+    (dotimes [i 3] (?= (b/get b (+ 7 i)) (byte i)))))
+
+(deftest circular-get-and-set-for-buffers
+  (let [b (b/byte-buffer 10)]
+    (dotimes [i 7] (b/push b (byte i)))
+    (dotimes [i 3] (b/pop b))
+    (dotimes [i 6] (b/set b i (byte (* i i))))
+    (?throws (b/set b 7 (byte 0)) IllegalArgumentException)
+    (b/expand 6 (b/source b))
+    (dotimes [i 6] (?= (b/get b (+ i 4)) (* i i)))
+    (b/drop 7 (b/source b))
+    (?throws (b/get b 4 (byte 0)) IllegalArgumentException)))
+
 ;;buffer has capacity, size and free space
 ;;direct buffers
 ;;read/write covariance/contravariance

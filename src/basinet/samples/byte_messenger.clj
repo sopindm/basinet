@@ -11,11 +11,11 @@
 
 (defn- read-message [source buffer size]
   (let [finish-size (- (b/size (b/sink buffer)) size)]
-    (while (> (b/size (b/sink buffer)) finish-size)
+    (while (> ^int (b/size (b/sink buffer)) ^int finish-size)
       (b/read source buffer))))
 
 (defn- write-message [sink buffer size]
-  (while (> (b/size (b/source buffer)) 0)
+  (while (> ^int (b/size (b/source buffer)) 0)
     (b/write sink buffer)))
 
 (defn- buffer [message-size] (b/byte-buffer message-size))
@@ -68,10 +68,14 @@
                                 (count client-results))))
        :rps (float (+ (reduce + (map :rps client-results))))})))
 
-(defn -main []
+(defn benchmark-all []
   (for [clients [1 2 3 4]]
     (for [message-size [1 2 5 10 100]]
       (benchmark clients message-size))))
+
+(defn -main [clients size]
+  (println (benchmark (Integer/parseInt clients) (Integer/parseInt size)))
+  (System/exit 0))
              
            
            

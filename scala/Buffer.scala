@@ -8,17 +8,29 @@ trait Buffered {
   def expand(n: Int): Unit
 }
 
-trait BufferedSource[T] extends Buffered with SourceLike[T] {
+trait RandomAccessSource[T] extends Source[T] {
+  def get(index: Int): T
+}
+
+trait RandomAccessSink[T] extends Sink[T] {
+  def set(index: Int, value: T): Unit
+}
+
+trait BufferedSource[T] extends Buffered
+    with SourceLike[T] with RandomAccessSource[T] {
   override def poppable = size > 0
   override def pop = if(poppable) super.pop else throw new BufferUnderflowException
 }
 
-trait BufferedSink[T] extends Buffered with SinkLike[T] {
+trait BufferedSink[T] extends Buffered
+    with SinkLike[T] with RandomAccessSink[T] {
   override def pushable = size > 0
   override def push(value: T) = if(pushable) super.push(value) else throw new BufferOverflowException
+
 }
 
-abstract class Buffer[T] extends Pipe[T] {
+abstract class Buffer[T] extends Pipe[T]
+    with RandomAccessSource[T] with RandomAccessSink[T] {
   override def source: BufferedSource[T]
   override def sink: BufferedSink[T]
 
@@ -40,6 +52,9 @@ abstract class Buffer[T] extends Pipe[T] {
     case result@Some(_) => { sink.expand(1); result }
     case None => None
   }
+
+  override def get(index: Int) = source.get(index)
+  override def set(index: Int, value: T) = sink.set(index, value)
 }
 
 class NIOBuffered(buffer: java.nio.Buffer) extends Buffered {
@@ -61,6 +76,15 @@ class NIOBuffered(buffer: java.nio.Buffer) extends Buffered {
   }
 
   def compact = if(buffer.position == buffer.limit) drop(0)
+
+  private[this] def requireValidIndex(index: Int) {
+
+  }
+
+  protected def indexToPosition(index: Int) = {
+    if(index < 0 || index >= size) throw new IllegalArgumentException
+    (buffer.position + index) % buffer.capacity
+  }
 }
 
 class ByteBuffer(buffer: java.nio.ByteBuffer) extends Buffer[Byte] {
@@ -71,11 +95,20 @@ class ByteBuffer(buffer: java.nio.ByteBuffer) extends Buffer[Byte] {
   override val source = new ByteBuffered(buffer.duplicate) with BufferedSource[Byte] {
     buffer.position(0)
     override def tryPop = if(poppable) {val value = Some(buffer.get); compact; value } else None
+
+    override def get(index: Int) = buffer.get(indexToPosition(index))
   }
 
-  override val sink = new ByteBuffered(buffer.duplicate) with BufferedSink[Byte] {
+  override val sink = new ByteBuffered(buffer.duplicate)
+      with BufferedSink[Byte] {
     buffer.position(self.buffer.limit).limit(self.buffer.capacity)
-    override def tryPush(value: Byte) = if(pushable) { buffer.put(value); compact; true } else false
+    override def tryPush(value: Byte) = if(pushable) {
+      buffer.put(value); compact; true }
+    else false
+
+    override def set(index: Int, value: Byte) {
+      buffer.put(indexToPosition(index), value)
+    }
   }
 }
 

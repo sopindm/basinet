@@ -1,5 +1,6 @@
 (ns basinet.tcp
-  (:require [basinet.scala :as scala])
+  (:require [basinet :as b]
+            [basinet.scala :as scala])
   (:import [basinet TcpAcceptor TcpConnector TcpAddressable TcpSocket]
            [java.net InetSocketAddress]
            [java.nio.channels SocketChannel ServerSocketChannel]))
@@ -20,7 +21,7 @@
   (with-open [connector (connector address port
                                    :local-host ^String local-host
                                    :local-port ^String local-port)]
-    (basinet/pop connector)))
+    (b/pop connector)))
 
 (defn local-address [^TcpAddressable channel] (scala/option->nullable (.localAddress channel)))
 (defn remote-address [^TcpAddressable channel] (scala/option->nullable (.remoteAddress channel)))
