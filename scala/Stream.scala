@@ -84,17 +84,30 @@ trait SinkChannelLike[T] extends SinkChannel[T] with SinkLike[T] {
   override def pushable = isOpen
 }
 
-trait Socket[T] extends Channel {
-  def source: SourceChannel[T]
-  def sink: SinkChannel[T]
+trait Pipe[T] extends Source[T] with Sink[T] {
+  def source: Source[T]
+  def sink: Sink[T]
+
+  override def push(value: T) = sink.push(value)
+  override def pushIn(value: T, milliseconds: Int) = sink.pushIn(value, milliseconds)
+  override def tryPush(value: T) = sink.tryPush(value)
+
+  override def pop = source.pop
+  override def popIn(milliseconds: Int) = source.popIn(milliseconds)
+  override def tryPop = source.tryPop
 }
 
-class SocketOf[T](override val source: SourceChannel[T], override val sink: SinkChannel[T])
-    extends Socket[T]{
+trait PipeChannel[T] extends Pipe[T] with Channel {
+  override def source: SourceChannel[T]
+  override def sink: SinkChannel[T]
+}
+
+class PipeOf[T](override val source: SourceChannel[T], override val sink: SinkChannel[T])
+    extends PipeChannel[T]{
   override def isOpen = source.isOpen || sink.isOpen
   override def close { source.close; sink.close }
 }
 
-object SocketOf {
-  def apply[T](source: SourceChannel[T], sink: SinkChannel[T]) = new SocketOf[T](source, sink)
+object PipeOf {
+  def apply[T](source: SourceChannel[T], sink: SinkChannel[T]) = new PipeOf[T](source, sink)
 }

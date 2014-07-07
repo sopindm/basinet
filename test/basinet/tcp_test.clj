@@ -2,7 +2,7 @@
   (:require [khazad-dum :refer :all]
             [basinet :as b]
             [basinet.tcp :as tcp])
-  (:import [basinet Socket]))
+  (:import [basinet Pipe]))
 
 (defmacro with-tcp [[acceptor connector] & body]
   `(with-open [~acceptor (tcp/acceptor "localhost" 12345)
@@ -13,8 +13,8 @@
   (with-tcp [a c]
     (with-open [ssocket (b/pop a)
                 csocket (b/pop c)]
-      (?true (instance? Socket ssocket))
-      (?true (instance? Socket csocket)))))
+      (?true (instance? Pipe ssocket))
+      (?true (instance? Pipe csocket)))))
 
 (deftest popping-from-empty-acceptor-and-connector
   (with-open [a (tcp/acceptor "localhost" 12345 :backlog 1)]
@@ -81,7 +81,7 @@
 (deftest connect-function
   (with-open [acceptor (tcp/acceptor "localhost" 12345)]
     (with-open [socket (tcp/connect "localhost" 12345 :local-host "localhost" :local-port 23456)]
-      (?true (instance? Socket socket)))))
+      (?true (instance? Pipe socket)))))
 
 (deftest cannot-read-from-closed-acceptor
   (let [acceptor (tcp/acceptor "localhost" 12345)]

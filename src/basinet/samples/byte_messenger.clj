@@ -18,11 +18,13 @@
   (while (> (b/size (b/source buffer)) 0)
     (b/write sink buffer)))
 
+(defn- buffer [message-size] (b/byte-buffer message-size))
+
 (defn- handle-connection [socket message-size]
   (with-open [source (b/source socket)
               sink (b/sink socket)]
-    (let [input-buffer (b/byte-buffer message-size)
-          output-buffer (b/byte-buffer message-size)]
+    (let [input-buffer (buffer message-size)
+          output-buffer (buffer message-size)]
       (dotimes [i messages-per-connection]
         (read-message source input-buffer message-size)
         (transform-and-reply input-buffer reverse output-buffer message-size)
@@ -42,8 +44,8 @@
   (with-open [socket (tcp/connect host port)]
     (let [source (b/source socket)
           sink (b/sink socket)
-          input-buffer (b/byte-buffer message-size)
-          output-buffer (b/byte-buffer message-size)
+          input-buffer (buffer message-size)
+          output-buffer (buffer message-size)
           latency (atom 0)
           start-time (System/currentTimeMillis)]
       (dotimes [i messages-per-connection]

@@ -23,23 +23,23 @@
   (scala/option->nullable (.popIn source milliseconds)))
 (defn try-pop [^basinet.Source source] (scala/option->nullable (.tryPop source)))
 
-(defn read [source buffer] (.read source buffer)) 
-(defn write [sink buffer] (.write sink buffer))
+(defn read [^basinet.SourceChannel source ^basinet.Buffer buffer] (.read source buffer)) 
+(defn write [^basinet.SinkChannel sink ^basinet.Buffer buffer] (.write sink buffer))
 
 ;;
 ;; Sockets
 ;; 
 
-(defn ^basinet.Source source [socket] (.source socket))
-(defn ^basinet.Sink sink [socket] (.sink socket))
+(defn ^basinet.Source source [^basinet.Pipe pipe] (.source pipe))
+(defn ^basinet.Sink sink [^basinet.Pipe pipe] (.sink pipe))
 
-(defn pipe [] (.apply basinet.Pipe$/MODULE$))
+(defn pipe [] (.apply basinet.NIOPipe$/MODULE$))
 
 ;;
 ;; Buffers
 ;;
   
-(defn size [buffered] (.size buffered))
+(defn size [^basinet.Buffered buffered] (.size buffered))
 
 (defn byte-buffer [size-or-coll]
   (let [buffer (if (integer? size-or-coll)

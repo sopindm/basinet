@@ -1,6 +1,6 @@
 package basinet
 
-import java.nio.channels.{Pipe => NIOPipe, _}
+import java.nio.channels.{Pipe => _, _}
 import java.net._
 import scala.annotation.tailrec
 
@@ -71,10 +71,10 @@ class NIOByteSink[T <: WritableByteChannel with SelectableChannel](channel: T)
   }
 }
 
-object Pipe {
+object NIOPipe {
   def apply = {
-    val pipe = NIOPipe.open
-    SocketOf(new NIOByteSource(pipe.source), new NIOByteSink(pipe.sink))
+    val pipe = java.nio.channels.Pipe.open
+    PipeOf(new NIOByteSource(pipe.source), new NIOByteSink(pipe.sink))
   }
 }
 
@@ -100,7 +100,8 @@ trait TcpAddressable {
   def remoteAddress: scala.Option[TcpAddress]
 }
 
-class TcpSocket(channel: java.nio.channels.SocketChannel) extends Socket[Byte] with TcpAddressable {
+class TcpSocket(channel: java.nio.channels.SocketChannel)
+    extends PipeChannel[Byte] with TcpAddressable {
   self: TcpSocket =>
 
   channel.setOption[java.lang.Boolean](java.net.StandardSocketOptions.TCP_NODELAY, true)
@@ -153,7 +154,7 @@ object TcpSocket {
 }
 
 class TcpAcceptor(channel: ServerSocketChannel) 
-    extends NIOSource[Socket[Byte]](channel) with TcpAddressable {
+    extends NIOSource[PipeChannel[Byte]](channel) with TcpAddressable {
   override def tryPop = {
     val socket = channel.accept
 
@@ -165,7 +166,7 @@ class TcpAcceptor(channel: ServerSocketChannel)
 }
 
 class TcpConnector(channel: SocketChannel, remote: SocketAddress)
-    extends NIOSource[Socket[Byte]](channel) with TcpAddressable {
+    extends NIOSource[PipeChannel[Byte]](channel) with TcpAddressable {
   var connected = channel.connect(remote)
   var read = false
 

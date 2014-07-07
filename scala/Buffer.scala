@@ -18,9 +18,9 @@ trait BufferedSink[T] extends Buffered with SinkLike[T] {
   override def push(value: T) = if(pushable) super.push(value) else throw new BufferOverflowException
 }
 
-abstract class Buffer[T] extends Source[T] with Sink[T] {
-  def source: BufferedSource[T]
-  def sink: BufferedSink[T]
+abstract class Buffer[T] extends Pipe[T] {
+  override def source: BufferedSource[T]
+  override def sink: BufferedSink[T]
 
   override def push(value: T) { sink.push(value); source.expand(1) }
   override def pushIn(value: T, milliseconds: Int) =
