@@ -63,6 +63,17 @@
       (?= (b/size (b/sink buffer)) 3)
       (dotimes [i 7] (?= (b/pop buffer) (byte (* i i)))))))
 
+(deftest drop-and-expand-for-whole-buffer
+  (let [b (b/byte-buffer 10)]
+    (b/expand 7 b)
+    (?= (b/size (b/source b)) 7)
+    (?= (b/size (b/sink b)) 3)
+    (?= (b/size b) 7)
+    (b/drop 3 b)
+    (?= (b/size (b/source b)) 4)
+    (?= (b/size (b/sink b)) 6)
+    (?= (b/size b) 4)))
+
 (deftest random-access-for-buffers
   (let [b (b/byte-buffer 10)]
     (dotimes [i 7] (b/push b (byte i)))

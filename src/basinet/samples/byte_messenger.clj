@@ -27,7 +27,11 @@
           output-buffer (buffer message-size)]
       (dotimes [i messages-per-connection]
         (read-message source input-buffer message-size)
-        (transform-and-reply input-buffer reverse output-buffer message-size)
+        (dotimes [i message-size]
+          (b/set output-buffer
+                 (- message-size i 1) (b/get input-buffer i)))
+        (b/expand message-size output-buffer)
+        (b/drop message-size input-buffer)
         (write-message sink output-buffer message-size)))))
  
 (defn server [host port connections message-size]

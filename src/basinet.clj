@@ -39,8 +39,8 @@
 ;; Buffers
 ;;
   
-(defn drop [n buffered] (.drop buffered n))
-(defn expand [n buffered] (.expand buffered n))
+(defn drop [n ^basinet.Buffered buffered] (.drop buffered ^int n))
+(defn expand [n ^basinet.Buffered buffered] (.expand buffered ^int n))
 
 (defn size [^basinet.Buffered buffered] (.size buffered))
 
@@ -51,5 +51,8 @@
     (when (integer? size-or-coll) (.limit buffer 0))
     (basinet.ByteBuffer. buffer)))
 
-(defn get [buffer index] (.get buffer index))
-(defn set [buffer index value] (.set buffer index value))
+(defn get [^basinet.BufferedSource buffer index]
+  (.get buffer ^int index))
+
+(defn set [^basinet.BufferedSink buffer index value]
+  (.set buffer ^int index value))

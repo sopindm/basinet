@@ -30,7 +30,7 @@ trait BufferedSink[T] extends Buffered
 }
 
 abstract class Buffer[T] extends Pipe[T]
-    with RandomAccessSource[T] with RandomAccessSink[T] {
+    with RandomAccessSource[T] with RandomAccessSink[T] with Buffered {
   override def source: BufferedSource[T]
   override def sink: BufferedSink[T]
 
@@ -52,6 +52,10 @@ abstract class Buffer[T] extends Pipe[T]
     case result@Some(_) => { sink.expand(1); result }
     case None => None
   }
+
+  override def drop(n: Int) = { source.drop(n); sink.expand(n) }
+  override def expand(n: Int) = { source.expand(n); sink.drop(n) }
+  override def size = source.size
 
   override def get(index: Int) = source.get(index)
   override def set(index: Int, value: T) = sink.set(index, value)
