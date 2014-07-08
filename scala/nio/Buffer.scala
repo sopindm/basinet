@@ -35,17 +35,23 @@ class ByteBuffer(buffer: java.nio.ByteBuffer) extends basinet.Buffer[Byte] {
 
   class ByteBuffered(val buffer: java.nio.ByteBuffer) extends Buffered(buffer)
 
-  override val source = new ByteBuffered(buffer.duplicate)
+  class ByteSource(buffer: java.nio.ByteBuffer) extends ByteBuffered(buffer) 
       with basinet.BufferedSource[Byte] {
     buffer.position(0)
+
+    override def source = this
+
     override def tryPop = if(poppable) {val value = Some(buffer.get); compact; value } else None
 
     override def get(index: Int) = buffer.get(indexToPosition(index))
   }
 
-  override val sink = new ByteBuffered(buffer.duplicate)
+  class ByteSink(buffer: java.nio.ByteBuffer) extends ByteBuffered(buffer)
       with basinet.BufferedSink[Byte] {
     buffer.position(self.buffer.limit).limit(self.buffer.capacity)
+
+    override def sink = this
+
     override def tryPush(value: Byte) = if(pushable) {
       buffer.put(value); compact; true }
     else false
@@ -54,6 +60,9 @@ class ByteBuffer(buffer: java.nio.ByteBuffer) extends basinet.Buffer[Byte] {
       buffer.put(indexToPosition(index), value)
     }
   }
+
+  override val source = new ByteSource(buffer.duplicate)
+  override val sink = new ByteSink(buffer.duplicate)
 }
 
 object ByteBuffer {

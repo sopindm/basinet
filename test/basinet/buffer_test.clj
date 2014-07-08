@@ -93,6 +93,22 @@
     (b/drop 7 (b/source b))
     (?throws (b/get b 4 (byte 0)) IllegalArgumentException)))
 
+(deftest sink-and-source-for-buffers-sink-and-source
+  (let [b (b/byte-buffer 10)]
+    (?= (b/sink (b/sink b)) (b/sink b))
+    (?= (b/source (b/source b)) (b/source b))))
+
+(deftest pushable-and-poppable-for-whole-buffer
+  (let [b (b/byte-buffer 10)]
+    (?false (.poppable b))
+    (?true (.pushable b))
+    (b/expand 5 b)
+    (?true (.poppable b))
+    (?true (.pushable b))
+    (b/expand 5 b)
+    (?true (.poppable b))
+    (?false (.pushable b))))
+
 ;;buffer has capacity, size and free space
 ;;direct buffers
 ;;read/write covariance/contravariance

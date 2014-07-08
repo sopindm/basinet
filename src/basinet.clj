@@ -14,6 +14,8 @@
 ;; Basic stream functions
 ;;
 
+(defn update [^basinet.Channel channel] (.update channel))
+
 (defn push [^basinet.Sink sink item] (.push sink item))
 (defn push-in [^basinet.Sink sink item milliseconds] (.pushIn sink item milliseconds))
 (defn try-push [^basinet.Sink sink item] (.tryPush sink item))
@@ -25,6 +27,8 @@
 
 (defn read [^basinet.SourceChannel source ^basinet.Buffer buffer] (.read source buffer)) 
 (defn write [^basinet.SinkChannel sink ^basinet.Buffer buffer] (.write sink buffer))
+
+(defn chain [s1 s2] (.apply basinet.Chain$/MODULE$ s1 s2))
 
 ;;
 ;; Sockets

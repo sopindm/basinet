@@ -12,9 +12,13 @@ class Channel(channel: SelectableChannel) extends basinet.Channel {
 }
 
 abstract class Source[T](channel: SelectableChannel) extends Channel(channel)
-    with basinet.SourceChannelLike[T]
+    with basinet.SourceChannel[T] {
+  override def source = this
+}
 abstract class Sink[T](channel: SelectableChannel) extends Channel(channel)
-    with basinet.SinkChannelLike[T]
+    with basinet.SinkChannel[T] {
+  override def sink = this
+}
 
 class ByteSource[T <: ReadableByteChannel with SelectableChannel](channel: T)
     extends Source[Byte](channel) {

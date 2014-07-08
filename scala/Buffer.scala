@@ -8,31 +8,25 @@ trait Buffered {
   def expand(n: Int): Unit
 }
 
-trait RandomAccessSource[T] extends Source[T] {
+trait BufferedSource[T] extends Source[T] with Buffered {
   def get(index: Int): T
-}
 
-trait RandomAccessSink[T] extends Sink[T] {
-  def set(index: Int, value: T): Unit
-}
-
-trait BufferedSource[T] extends Buffered
-    with SourceLike[T] with RandomAccessSource[T] {
   override def poppable = size > 0
   override def pop = if(poppable) super.pop else throw new BufferUnderflowException
 }
 
-trait BufferedSink[T] extends Buffered
-    with SinkLike[T] with RandomAccessSink[T] {
+trait BufferedSink[T] extends Buffered with Sink[T] {
+  def set(index: Int, value: T): Unit
+
   override def pushable = size > 0
   override def push(value: T) = if(pushable) super.push(value) else throw new BufferOverflowException
-
 }
 
-abstract class Buffer[T] extends Pipe[T]
-    with RandomAccessSource[T] with RandomAccessSink[T] with Buffered {
+abstract class Buffer[T] extends Pipe[T] with BufferedSource[T] with BufferedSink[T] {
   override def source: BufferedSource[T]
   override def sink: BufferedSink[T]
+
+  override def pushable = sink.pushable
 
   override def push(value: T) { sink.push(value); source.expand(1) }
   override def pushIn(value: T, milliseconds: Int) =

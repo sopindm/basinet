@@ -92,10 +92,10 @@
       (?true (realized? f))
       (?= @f true))))
 
-
-
-
-
+(deftest sink-and-source-for-pipes-sink-and-source
+  (with-pipe [r w]
+    (?= (b/sink w) w)
+    (?= (b/source r) r)))
 
     
 

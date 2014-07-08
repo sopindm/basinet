@@ -9,30 +9,24 @@
 
 (def messages-per-connection 100000)
 
-(defn- read-message [source buffer size]
-  (let [finish-size (- (b/size (b/sink buffer)) size)]
-    (while (> ^int (b/size (b/sink buffer)) ^int finish-size)
-      (b/read source buffer))))
+(defn- read-message [source size]
+  (while (< (b/size source) size) (b/update source)))
 
-(defn- write-message [sink buffer size]
-  (while (> ^int (b/size (b/source buffer)) 0)
-    (b/write sink buffer)))
+(defn- write-message [sink size]
+  (while (< (b/size sink) size) (b/update sink)))
 
 (defn- buffer [message-size] (b/byte-buffer message-size))
 
 (defn- handle-connection [socket message-size]
-  (with-open [source (b/source socket)
-              sink (b/sink socket)]
-    (let [input-buffer (buffer message-size)
-          output-buffer (buffer message-size)]
-      (dotimes [i messages-per-connection]
-        (read-message source input-buffer message-size)
-        (dotimes [i message-size]
-          (b/set output-buffer
-                 (- message-size i 1) (b/get input-buffer i)))
-        (b/expand message-size output-buffer)
-        (b/drop message-size input-buffer)
-        (write-message sink output-buffer message-size)))))
+  (with-open [source (b/chain (b/source socket) (buffer message-size))
+              sink (b/chain (buffer message-size) (b/sink socket))]
+    (dotimes [i messages-per-connection]
+      (read-message source message-size)
+      (dotimes [i message-size]
+        (b/set sink (- message-size i 1) (b/get source i)))
+      (b/drop message-size sink)
+      (b/drop message-size source)
+      (write-message sink message-size))))
  
 (defn server [host port connections message-size]
   (with-open [acceptor (tcp/acceptor host port)]
@@ -46,18 +40,16 @@
 
 (defn client [host port message-size]
   (with-open [socket (tcp/connect host port)]
-    (let [source (b/source socket)
-          sink (b/sink socket)
-          input-buffer (buffer message-size)
-          output-buffer (buffer message-size)
+    (let [source (b/chain (b/source socket) (buffer message-size))
+          sink (b/chain (buffer message-size) (b/sink socket))
           latency (atom 0)
           start-time (System/currentTimeMillis)]
       (dotimes [i messages-per-connection]
         (let [start-time (System/currentTimeMillis)]
-          (dotimes [i message-size] (b/push output-buffer (byte 0)))
-          (write-message sink output-buffer message-size)
-          (read-message source input-buffer message-size)
-          (dotimes [i message-size] (b/pop input-buffer))
+          (dotimes [i message-size] (b/push sink (byte 0)))
+          (write-message sink message-size)
+          (read-message source message-size)
+          (b/drop message-size source)
           (swap! latency + (- (System/currentTimeMillis) start-time))))
       (swap! latency / messages-per-connection)
       {:latency (float @latency)

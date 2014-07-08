@@ -5,12 +5,31 @@ import java.nio.channels.SelectableChannel
 trait Channel extends java.io.Closeable {
   def isOpen: Boolean
   def close: Unit
+
+  def update: Unit = ()
 }
 
 trait Source[T] {
-  def pop: T
-  def popIn(milliseconds: Int): scala.Option[T]
+  def source: Source[T]
+  def poppable: Boolean
   def tryPop: scala.Option[T]
+
+  def pop: T = {
+    var result = tryPop
+
+    while(result.isEmpty) result = tryPop
+    result.get
+  }
+
+  def popIn(milliseconds: Int): scala.Option[T] = {
+    var result = tryPop
+    val startTime = System.currentTimeMillis
+
+    while(result.isEmpty && System.currentTimeMillis < startTime + milliseconds && poppable)
+      result = tryPop
+
+    result
+  }
 }
 
 trait SourceChannel[T] extends Source[T] with Channel {
@@ -27,51 +46,17 @@ trait SourceChannel[T] extends Source[T] with Channel {
     while(tryRead(buffer)) read += 1
     read
   }
-}
 
-trait SourceLike[T] extends Source[T] {
-  override def pop: T = {
-    var result = tryPop
-
-    while(result.isEmpty) result = tryPop
-    result.get
-  }
-
-  def poppable: Boolean = true
-
-  override def popIn(milliseconds: Int) = {
-    var result = tryPop
-    val startTime = System.currentTimeMillis
-
-    while(result.isEmpty && System.currentTimeMillis < startTime + milliseconds && poppable)
-      result = tryPop
-
-    result
-  }
-}
-
-trait SourceChannelLike[T] extends SourceChannel[T] with SourceLike[T] {
   override def poppable = isOpen
 }
 
 trait Sink[T] {
-  def push(value: T): Unit
-  def pushIn(value: T, milliseconds: Int): Boolean
+  def sink: Sink[T]
+  def pushable: Boolean
   def tryPush(value: T): Boolean
-}
 
-trait SinkChannel[T] extends Sink[T] with Channel {
-  def write(buffer: Buffer[T]): Int = throw new UnsupportedOperationException
-}
-
-trait SinkLike[T] extends Sink[T] {
-  override def push(value: T) {
-    while(!tryPush(value)) {}
-  }
-
-  def pushable: Boolean = true
-
-  override def pushIn(value: T, milliseconds: Int): Boolean = {
+  def push(value: T): Unit = while(!tryPush(value)) {}
+  def pushIn(value: T, milliseconds: Int): Boolean = {
     val startTime = System.currentTimeMillis
     var result = false
     while(!result && (System.currentTimeMillis - startTime) < milliseconds && pushable)
@@ -80,14 +65,12 @@ trait SinkLike[T] extends Sink[T] {
   }
 }
 
-trait SinkChannelLike[T] extends SinkChannel[T] with SinkLike[T] {
+trait SinkChannel[T] extends Sink[T] with Channel {
   override def pushable = isOpen
+  def write(buffer: Buffer[T]): Int = throw new UnsupportedOperationException
 }
 
 trait Pipe[T] extends Source[T] with Sink[T] {
-  def source: Source[T]
-  def sink: Sink[T]
-
   override def push(value: T) = sink.push(value)
   override def pushIn(value: T, milliseconds: Int) = sink.pushIn(value, milliseconds)
   override def tryPush(value: T) = sink.tryPush(value)
@@ -95,6 +78,9 @@ trait Pipe[T] extends Source[T] with Sink[T] {
   override def pop = source.pop
   override def popIn(milliseconds: Int) = source.popIn(milliseconds)
   override def tryPop = source.tryPop
+
+  override def poppable = source.poppable
+  override def pushable = sink.pushable
 }
 
 trait PipeChannel[T] extends Pipe[T] with Channel {
