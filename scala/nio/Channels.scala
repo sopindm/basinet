@@ -1,23 +1,23 @@
-package basinet
+package basinet.nio
 
 import java.nio.channels.{Pipe => _, _}
 import java.net._
 import scala.annotation.tailrec
 
-class NIOChannel(channel: SelectableChannel) extends Channel {
+class Channel(channel: SelectableChannel) extends basinet.Channel {
   channel.configureBlocking(false)
 
   override def close { if(isOpen) channel.close }
   override def isOpen = channel.isOpen
 }
 
-abstract class NIOSource[T](channel: SelectableChannel) extends NIOChannel(channel)
-    with SourceChannelLike[T]
-abstract class NIOSink[T](channel: SelectableChannel) extends NIOChannel(channel)
-    with SinkChannelLike[T]
+abstract class Source[T](channel: SelectableChannel) extends Channel(channel)
+    with basinet.SourceChannelLike[T]
+abstract class Sink[T](channel: SelectableChannel) extends Channel(channel)
+    with basinet.SinkChannelLike[T]
 
-class NIOByteSource[T <: ReadableByteChannel with SelectableChannel](channel: T)
-    extends NIOSource[Byte](channel) {
+class ByteSource[T <: ReadableByteChannel with SelectableChannel](channel: T)
+    extends Source[Byte](channel) {
   protected def eof() { close() }
 
   override def tryPop = { 
@@ -38,14 +38,14 @@ class NIOByteSource[T <: ReadableByteChannel with SelectableChannel](channel: T)
     read(buffer, readBefore + readNow)
   }
 
-  override def read(buffer: Buffer[Byte]) = buffer match {
+  override def read(buffer: basinet.Buffer[Byte]) = buffer match {
     case bb: ByteBuffer => read(bb, 0)
     case _ => super.read(buffer)
   }
 }
 
-class NIOByteSink[T <: WritableByteChannel with SelectableChannel](channel: T)
-    extends NIOSink[Byte](channel) {
+class ByteSink[T <: WritableByteChannel with SelectableChannel](channel: T)
+    extends Sink[Byte](channel) {
   override def tryPush(value: Byte) = {
     val buffer = ByteBuffer(1)
     buffer.push(value)
@@ -65,16 +65,16 @@ class NIOByteSink[T <: WritableByteChannel with SelectableChannel](channel: T)
     write(buffer, writenBefore + writen)
   }
 
-  override def write(buffer: Buffer[Byte]) = buffer match {
+  override def write(buffer: basinet.Buffer[Byte]) = buffer match {
     case bb: ByteBuffer => write(bb, 0)
     case _ => super.write(buffer)
   }
 }
 
-object NIOPipe {
+object Pipe {
   def apply = {
     val pipe = java.nio.channels.Pipe.open
-    PipeOf(new NIOByteSource(pipe.source), new NIOByteSink(pipe.sink))
+    basinet.PipeOf(new ByteSource(pipe.source), new ByteSink(pipe.sink))
   }
 }
 
@@ -101,7 +101,7 @@ trait TcpAddressable {
 }
 
 class TcpSocket(channel: java.nio.channels.SocketChannel)
-    extends PipeChannel[Byte] with TcpAddressable {
+    extends basinet.PipeChannel[Byte] with TcpAddressable {
   self: TcpSocket =>
 
   channel.setOption[java.lang.Boolean](java.net.StandardSocketOptions.TCP_NODELAY, true)
@@ -122,7 +122,7 @@ class TcpSocket(channel: java.nio.channels.SocketChannel)
     if(address != null) Some(TcpAddress(address)) else None
   }
 
-  override val source = new NIOByteSource(channel) with TcpAddressable {
+  override val source = new ByteSource(channel) with TcpAddressable {
     override def isOpen = self.isOpen && _readable
 
     override def close {
@@ -136,7 +136,7 @@ class TcpSocket(channel: java.nio.channels.SocketChannel)
     override def remoteAddress = self.remoteAddress
   }
 
-  override val sink = new NIOByteSink(channel) with TcpAddressable {
+  override val sink = new ByteSink(channel) with TcpAddressable {
     override def isOpen = self.isOpen && _writable
 
     override def close {
@@ -153,8 +153,8 @@ object TcpSocket {
   def apply(channel: SocketChannel) = new TcpSocket(channel)
 }
 
-class TcpAcceptor(channel: ServerSocketChannel) 
-    extends NIOSource[PipeChannel[Byte]](channel) with TcpAddressable {
+class TcpAcceptor(channel: ServerSocketChannel)
+    extends Source[basinet.PipeChannel[Byte]](channel) with TcpAddressable {
   override def tryPop = {
     val socket = channel.accept
 
@@ -166,7 +166,7 @@ class TcpAcceptor(channel: ServerSocketChannel)
 }
 
 class TcpConnector(channel: SocketChannel, remote: SocketAddress)
-    extends NIOSource[PipeChannel[Byte]](channel) with TcpAddressable {
+    extends Source[basinet.PipeChannel[Byte]](channel) with TcpAddressable {
   var connected = channel.connect(remote)
   var read = false
 

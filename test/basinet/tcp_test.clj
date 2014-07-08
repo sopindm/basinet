@@ -110,11 +110,11 @@
 (deftest tcp-socket-sink-and-source-types
   (with-tcp [a c]
     (with-open [s (b/pop c)]
-      (?true (instance? basinet.NIOByteSource (.source s)))
-      (?true (instance? basinet.NIOByteSink (.sink s))))
+      (?true (instance? basinet.nio.ByteSource (.source s)))
+      (?true (instance? basinet.nio.ByteSink (.sink s))))
     (with-open [s (b/pop a)]
-      (?true (instance? basinet.NIOByteSource (.source s)))
-      (?true (instance? basinet.NIOByteSink (.sink s))))))
+      (?true (instance? basinet.nio.ByteSource (.source s)))
+      (?true (instance? basinet.nio.ByteSink (.sink s))))))
 
 (deftest closing-tcp-socket-sink-and-source
   (with-tcp [a c]

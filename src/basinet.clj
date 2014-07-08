@@ -33,7 +33,7 @@
 (defn ^basinet.Source source [^basinet.Pipe pipe] (.source pipe))
 (defn ^basinet.Sink sink [^basinet.Pipe pipe] (.sink pipe))
 
-(defn pipe [] (.apply basinet.NIOPipe$/MODULE$))
+(defn pipe [] (.apply basinet.nio.Pipe$/MODULE$))
 
 ;;
 ;; Buffers
@@ -49,7 +49,7 @@
                  (ByteBuffer/allocate size-or-coll)
                  (ByteBuffer/wrap size-or-coll))]
     (when (integer? size-or-coll) (.limit buffer 0))
-    (basinet.ByteBuffer. buffer)))
+    (basinet.nio.ByteBuffer. buffer)))
 
 (defn get [^basinet.BufferedSource buffer index]
   (.get buffer ^int index))

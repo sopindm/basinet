@@ -1,7 +1,7 @@
 (ns basinet.tcp
   (:require [basinet :as b]
             [basinet.scala :as scala])
-  (:import [basinet TcpAcceptor TcpConnector TcpAddressable TcpSocket]
+  (:import [basinet.nio TcpAcceptor TcpConnector TcpAddressable TcpSocket]
            [java.net InetSocketAddress]
            [java.nio.channels SocketChannel ServerSocketChannel]))
 
