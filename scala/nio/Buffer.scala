@@ -6,16 +6,20 @@ class Buffer(buffer: java.nio.Buffer) extends basinet.Buffer
   override def size = buffer.limit - buffer.position + tail
 
   private[nio]
-  def _drop(n: Int) = if(buffer.position + n >= buffer.capacity) {
-    val newSize = size - n
-    buffer.position(buffer.position + n - buffer.capacity)
-    buffer.limit(buffer.position + newSize)
-    tail = 0
+  def _drop(n: Int) = {
+    requireOpen
+    if(buffer.position + n >= buffer.capacity) {
+      val newSize = size - n
+      buffer.position(buffer.position + n - buffer.capacity)
+      buffer.limit(buffer.position + newSize)
+      tail = 0
+    }
+    else buffer.position(buffer.position + n)
   }
-  else buffer.position(buffer.position + n)
 
   private[nio]
   def _expand(n: Int) = {
+    requireOpen
     val inc = scala.math.min(buffer.capacity - buffer.limit, n)
     buffer.limit(buffer.limit + inc)
     tail += n - inc
@@ -40,7 +44,9 @@ package bytebuffer {
   class Source(buffer: java.nio.ByteBuffer)
       extends Buffer(buffer) with basinet.BufferSource[Source, Byte] {
     override def source = this
-    override def get(index: Int) = buffer.get(indexToPosition(index))
+    override def get(index: Int) = {
+      requireOpen; buffer.get(indexToPosition(index))
+    }
   }
 
   class Sink(buffer: java.nio.ByteBuffer)
@@ -49,25 +55,39 @@ package bytebuffer {
     compact
 
     override def sink = this
-    override def set(index: Int, value: Byte) =
-      buffer.put(indexToPosition(index), value)
+    override def set(index: Int, value: Byte) {
+      requireOpen; buffer.put(indexToPosition(index), value)
+    }
   }
 }
 
 class ByteBuffer(buffer: java.nio.ByteBuffer)
     extends basinet.Pipe[bytebuffer.Source, bytebuffer.Sink, Byte]
  {
+   self =>
+
    override def close { source.close; sink.close }
    override def isOpen = source.isOpen || sink.isOpen
 
    override val source: bytebuffer.Source =
      new bytebuffer.Source(buffer.duplicate) {
+       override def close { super.close ; sink.close }
+
        override def drop(n: Int) = { _drop(n); sink._expand(n) }
        override def expand(n: Int) = { _expand(n); sink._drop(n) }
      }
+
    override val sink: bytebuffer.Sink =
      new bytebuffer.Sink(buffer.duplicate) {
        override def drop(n: Int) = { _drop(n); source._expand(n) }
        override def expand(n: Int) = { _expand(n); source._drop(n) }
     }
+}
+
+object ByteBuffer {
+  def apply(n: Int) = {
+    val buffer = java.nio.ByteBuffer.allocate(n)
+    buffer.limit(0)
+    new ByteBuffer(buffer)
+  }
 }

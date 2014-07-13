@@ -1,5 +1,6 @@
 package basinet.nio
 
+import basinet.{Result}
 import java.nio.channels.{Pipe => JPipe, Channel => JChannel, _}
 import java.net._
 import scala.Option
@@ -29,12 +30,10 @@ class ByteSource(val channel: ReadableByteChannel)
   def eof = close
 
   override def tryPop:Option[Byte] = {
-    val buffer = java.nio.ByteBuffer.allocate(1)
-    channel.read(buffer) match {
-      case -1 => { eof; None }
-      case 1 => Some(buffer.get(0))
-      case _ => None
-    }
+    val buffer = ByteBuffer(1)
+    if(ByteChannelReader.convert(this, buffer) == Result.OVERFLOW)
+      Some(buffer.pop)
+    else None
   }
 }
 
@@ -42,11 +41,8 @@ class ByteSink(val channel: WritableByteChannel)
     extends Channel(channel) with basinet.Sink[ByteSink, Byte] {
   override def sink = this
   override def tryPush(value: Byte) = {
-    val buffer = java.nio.ByteBuffer.allocate(1)
-    buffer.put(value)
-    buffer.position(0).limit(1)
-
-    channel.write(buffer) == 1
+    val buffer = ByteBuffer(1); buffer.push(value)
+    ByteChannelWriter.convert(buffer, this) == Result.UNDERFLOW
   }
 }
 
@@ -182,6 +178,7 @@ object ByteChannelReader
   }
 
   override def _convert(source: ByteSource, sink: bytebuffer.Sink) = {
+    sink.requireOpen
     val got = read(source, sink.buffer.duplicate, 0)
     sink.drop(got)
     if(sink.size > 0) basinet.Result.UNDERFLOW
@@ -202,6 +199,7 @@ object ByteChannelWriter
   }
 
   override def _convert(source: bytebuffer.Source, sink: ByteSink) = {
+    source.requireOpen
     val got = write(sink, source.buffer.duplicate, 0)
     source.drop(got)
     if(source.size > 0) basinet.Result.OVERFLOW

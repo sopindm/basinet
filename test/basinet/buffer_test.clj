@@ -1,6 +1,7 @@
 (ns basinet.buffer-test
   (:require [khazad-dum :refer :all]
-            [basinet :as b]))
+            [basinet :as b])
+  (:import [java.nio.channels ClosedChannelException]))
 
 (deftest buffer-has-push-and-pop
   (let [buffer (b/byte-buffer 10)]
@@ -62,8 +63,41 @@
     (?= (b/sink (b/sink b)) (b/sink b))
     (?= (b/source (b/source b)) (b/source b))))
 
-;closing source, sink and whole buffer
-;closing sink closes source
+(deftest closing-buffer-source
+  (let [b (b/byte-buffer 10)
+        s (b/source b)]
+    (b/push b (byte 123))
+    (.close s)
+    (?false (b/open? s))
+    (?false (b/poppable s))
+    (?throws (b/get s 0) ClosedChannelException)
+    (with-open [p (b/pipe)]
+      (?throws (b/convert s p) ClosedChannelException))
+    (?throws (b/drop 0 s) ClosedChannelException)
+    (?throws (b/expand 0 s) ClosedChannelException)))
+
+(deftest closing-buffer-sink
+  (let [b (b/byte-buffer 10)
+        s (b/sink b)]
+    (.close s)
+    (?false (b/open? s))
+    (?false (b/pushable s))
+    (?throws (b/set s 0 (byte 10)) ClosedChannelException)
+    (with-open [p (b/pipe)]
+      (?throws (b/convert p s) ClosedChannelException))))
+
+(deftest closing-whole-buffer
+  (with-open [b (b/byte-buffer 10)]
+    (.close b)
+    (?false (b/open? b))
+    (?false (b/open? (b/sink b)))
+    (?false (b/open? (b/source b)))))
+
+(deftest closing-buffer-source-closes-sink
+  (with-open [b (b/byte-buffer 10)]
+    (.close (b/source b))
+    (?false (b/open? (b/sink b)))
+    (?false (b/open? b))))
 
 ;;
 ;; byte wires

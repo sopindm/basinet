@@ -16,9 +16,13 @@
 
 (defn update [^basinet.Channel channel] (.update channel))
 
+(defn pushable [sink] (.pushable sink))
+
 (defn push [^basinet.Sink sink item] (.push sink item))
 (defn push-in [^basinet.Sink sink item milliseconds] (.pushIn sink item milliseconds))
 (defn try-push [^basinet.Sink sink item] (.tryPush sink item))
+
+(defn poppable [source] (.poppable source))
 
 (defn pop [^basinet.Source source] (.pop source))
 (defn pop-in [^basinet.Source source milliseconds]
