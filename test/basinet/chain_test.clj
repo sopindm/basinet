@@ -6,7 +6,7 @@
   (with-open [p (b/pipe)]
     (let [ci (b/chain (b/source p) (b/byte-buffer 10))]
       (dotimes [i 3] (b/push (b/sink p) (byte i)))
-      (dotimes [i 3] (?= (b/pop ci) i)))))
+      (dotimes [i 3] (?= (b/try-pop ci) i)))))
 
 (deftest closing-input-chain
   (with-open [p (b/pipe)]
@@ -17,7 +17,7 @@
   (with-open [p (b/pipe)]
     (let [b (b/byte-buffer 10)]
       (with-open [ci (b/chain (b/source p) b)]
-        (?= (b/source ci) b)))))
+        (?= (b/source ci) (b/source b))))))
 
 (deftest updating-input-chain
   (with-open [p (b/pipe)]
@@ -44,7 +44,7 @@
   (with-open [p (b/pipe)]
     (let [b (b/byte-buffer 10)]
       (with-open [co (b/chain b (b/sink p))]
-        (?= (b/sink co) b)))))
+        (?= (b/sink co) (b/sink b))))))
 
 (deftest closing-output-chain
   (with-open [p (b/pipe)]

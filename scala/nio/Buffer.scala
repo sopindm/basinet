@@ -1,10 +1,12 @@
 package basinet.nio
 
-class Buffered(buffer: java.nio.Buffer) extends basinet.Buffered {
+class Buffer(buffer: java.nio.Buffer) extends basinet.Buffer
+    with basinet.ChannelLike {
   private[this] var tail = 0
   override def size = buffer.limit - buffer.position + tail
 
-  override def drop(n: Int) = if(buffer.position + n >= buffer.capacity) {
+  private[nio]
+  def _drop(n: Int) = if(buffer.position + n >= buffer.capacity) {
     val newSize = size - n
     buffer.position(buffer.position + n - buffer.capacity)
     buffer.limit(buffer.position + newSize)
@@ -12,17 +14,17 @@ class Buffered(buffer: java.nio.Buffer) extends basinet.Buffered {
   }
   else buffer.position(buffer.position + n)
 
-  override def expand(n: Int) = {
+  private[nio]
+  def _expand(n: Int) = {
     val inc = scala.math.min(buffer.capacity - buffer.limit, n)
     buffer.limit(buffer.limit + inc)
     tail += n - inc
   }
 
+  override def drop(n: Int) = _drop(n)
+  override def expand(n: Int) = _expand(n)
+
   def compact = if(buffer.position == buffer.limit) drop(0)
-
-  private[this] def requireValidIndex(index: Int) {
-
-  }
 
   protected def indexToPosition(index: Int) = {
     if(index < 0 || index >= size) throw new IllegalArgumentException
@@ -30,45 +32,42 @@ class Buffered(buffer: java.nio.Buffer) extends basinet.Buffered {
   }
 }
 
-class ByteBuffer(buffer: java.nio.ByteBuffer) extends basinet.Buffer[Byte] {
-  self: ByteBuffer =>
+package bytebuffer {
+  class Buffer(val buffer: java.nio.ByteBuffer)
+      extends basinet.nio.Buffer(buffer) {
+  }
 
-  class ByteBuffered(val buffer: java.nio.ByteBuffer) extends Buffered(buffer)
-
-  class ByteSource(buffer: java.nio.ByteBuffer) extends ByteBuffered(buffer) 
-      with basinet.BufferedSource[Byte] {
-    buffer.position(0)
-
+  class Source(buffer: java.nio.ByteBuffer)
+      extends Buffer(buffer) with basinet.BufferSource[Source, Byte] {
     override def source = this
-
-    override def tryPop = if(poppable) {val value = Some(buffer.get); compact; value } else None
-
     override def get(index: Int) = buffer.get(indexToPosition(index))
   }
 
-  class ByteSink(buffer: java.nio.ByteBuffer) extends ByteBuffered(buffer)
-      with basinet.BufferedSink[Byte] {
-    buffer.position(self.buffer.limit).limit(self.buffer.capacity)
+  class Sink(buffer: java.nio.ByteBuffer)
+      extends Buffer(buffer) with basinet.BufferSink[Sink, Byte] {
+    buffer.position(buffer.limit).limit(buffer.capacity)
+    compact
 
     override def sink = this
-
-    override def tryPush(value: Byte) = if(pushable) {
-      buffer.put(value); compact; true }
-    else false
-
-    override def set(index: Int, value: Byte) {
+    override def set(index: Int, value: Byte) =
       buffer.put(indexToPosition(index), value)
-    }
   }
-
-  override val source = new ByteSource(buffer.duplicate)
-  override val sink = new ByteSink(buffer.duplicate)
 }
 
-object ByteBuffer {
-  def apply(n: Int) = {
-    val buffer = java.nio.ByteBuffer.allocate(n)
-    buffer.limit(0)
-    new ByteBuffer(buffer) 
-  }
+class ByteBuffer(buffer: java.nio.ByteBuffer)
+    extends basinet.Pipe[bytebuffer.Source, bytebuffer.Sink, Byte]
+ {
+   override def close { source.close; sink.close }
+   override def isOpen = source.isOpen || sink.isOpen
+
+   override val source: bytebuffer.Source =
+     new bytebuffer.Source(buffer.duplicate) {
+       override def drop(n: Int) = { _drop(n); sink._expand(n) }
+       override def expand(n: Int) = { _expand(n); sink._drop(n) }
+     }
+   override val sink: bytebuffer.Sink =
+     new bytebuffer.Sink(buffer.duplicate) {
+       override def drop(n: Int) = { _drop(n); source._expand(n) }
+       override def expand(n: Int) = { _expand(n); source._drop(n) }
+    }
 }

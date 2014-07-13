@@ -38,7 +38,7 @@
   (doseq [d data] (b/push sink d))
   (doall (repeatedly (count data) #(b/pop source))))
 
-(defn client [host port message-size]
+(defn client [host port message-size verbose?]
   (with-open [socket (tcp/connect host port)]
     (let [source (b/chain (b/source socket) (buffer message-size))
           sink (b/chain (buffer message-size) (b/sink socket))
@@ -46,10 +46,14 @@
           start-time (System/currentTimeMillis)]
       (dotimes [i messages-per-connection]
         (let [start-time (System/currentTimeMillis)]
-          (dotimes [i message-size] (b/push sink (byte 0)))
+          (if verbose?
+            (dotimes [i message-size] (b/push sink (byte i)))
+            (dotimes [i message-size] (b/push sink (byte 0))))
           (write-message sink message-size)
           (read-message source message-size)
-          (b/drop message-size source)
+          (if verbose? 
+            (println (repeatedly message-size #(b/pop source)))
+            (b/drop message-size source))
           (swap! latency + (- (System/currentTimeMillis) start-time))))
       (swap! latency / messages-per-connection)
       {:latency (float @latency)
@@ -58,7 +62,7 @@
 (defn benchmark [clients message-size]
   (let [server (future (server "localhost" 10000 clients message-size))]
     (Thread/sleep 10)
-    (let [clients (doall (repeatedly clients #(future (client "localhost" 10000 message-size))))
+    (let [clients (doall (repeatedly clients #(future (client "localhost" 10000 message-size false))))
           client-results (map (fn [c] @c) clients)]
       {:latency (int (* 1000 (/ (reduce + (map :latency client-results))
                                 (count client-results))))

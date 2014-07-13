@@ -9,9 +9,16 @@ trait Channel extends java.io.Closeable {
   def update: Unit = ()
 }
 
-trait Source[T] {
-  def source: Source[T]
-  def poppable: Boolean
+trait ChannelLike extends Channel {
+  private[this] var _isOpen = true
+  override def isOpen = _isOpen
+  override def close { _isOpen = false }
+}
+
+trait Source[SR <: Source[SR, T], T] extends Channel {
+  def source: SR
+
+  def poppable: Boolean = isOpen
   def tryPop: scala.Option[T]
 
   def pop: T = {
@@ -31,28 +38,10 @@ trait Source[T] {
     result
   }
 }
+trait Sink[SN <: Sink[SN, T], T] extends Channel {
+  def sink: SN
 
-trait SourceChannel[T] extends Source[T] with Channel {
-  private[this] def tryRead(buffer: Buffer[T]): Boolean = {
-    if(!buffer.sink.pushable) false
-    else tryPop match {
-      case Some(value) => { buffer.push(value); true }
-      case None => false
-    }
-  }
-
-  def read(buffer: Buffer[T]): Int = {
-    var read = 0
-    while(tryRead(buffer)) read += 1
-    read
-  }
-
-  override def poppable = isOpen
-}
-
-trait Sink[T] {
-  def sink: Sink[T]
-  def pushable: Boolean
+  def pushable: Boolean = isOpen
   def tryPush(value: T): Boolean
 
   def push(value: T): Unit = while(!tryPush(value)) {}
@@ -65,12 +54,8 @@ trait Sink[T] {
   }
 }
 
-trait SinkChannel[T] extends Sink[T] with Channel {
-  override def pushable = isOpen
-  def write(buffer: Buffer[T]): Int = throw new UnsupportedOperationException
-}
-
-trait Pipe[T] extends Source[T] with Sink[T] {
+trait Pipe[SR <: Source[SR, T], SN <: Sink[SN, T], T]
+    extends Source[SR, T] with Sink[SN, T] {
   override def push(value: T) = sink.push(value)
   override def pushIn(value: T, milliseconds: Int) = sink.pushIn(value, milliseconds)
   override def tryPush(value: T) = sink.tryPush(value)
@@ -83,17 +68,25 @@ trait Pipe[T] extends Source[T] with Sink[T] {
   override def pushable = sink.pushable
 }
 
-trait PipeChannel[T] extends Pipe[T] with Channel {
-  override def source: SourceChannel[T]
-  override def sink: SinkChannel[T]
-}
+class PipeOf[SR <: Source[SR, T], SN <: Sink[SN, T], T]
+  (_source: Source[SR, T], _sink: Sink[SN, T])
+    extends Pipe[SR, SN, T] {
+  override def source = _source.source
+  override def sink = _sink.sink
 
-class PipeOf[T](override val source: SourceChannel[T], override val sink: SinkChannel[T])
-    extends PipeChannel[T]{
-  override def isOpen = source.isOpen || sink.isOpen
-  override def close { source.close; sink.close }
+  override def isOpen = _source.isOpen || _sink.isOpen
+  override def close { _source.close; _sink.close }
 }
 
 object PipeOf {
-  def apply[T](source: SourceChannel[T], sink: SinkChannel[T]) = new PipeOf[T](source, sink)
+  def apply[SR <: Source[SR, T], SN <: Sink[SN, T], T]
+    (source: Source[SR, T], sink: Sink[SN, T])
+  = new PipeOf[SR, SN, T](source, sink)
+}
+
+abstract class Wire[SR <: Source[SR, _], SN <: Sink[SN, _]] {
+  def convert(from: Source[SR, _], to: Sink[SN, _]): Result =
+    _convert(from.source, to.sink)
+
+  protected def _convert(from: SR, to: SN): Result
 }

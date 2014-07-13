@@ -25,11 +25,6 @@
   (scala/option->nullable (.popIn source milliseconds)))
 (defn try-pop [^basinet.Source source] (scala/option->nullable (.tryPop source)))
 
-(defn read [^basinet.SourceChannel source ^basinet.Buffer buffer] (.read source buffer)) 
-(defn write [^basinet.SinkChannel sink ^basinet.Buffer buffer] (.write sink buffer))
-
-(defn chain [s1 s2] (.apply basinet.Chain$/MODULE$ s1 s2))
-
 ;;
 ;; Sockets
 ;; 
@@ -43,10 +38,10 @@
 ;; Buffers
 ;;
   
-(defn drop [n ^basinet.Buffered buffered] (.drop buffered ^int n))
-(defn expand [n ^basinet.Buffered buffered] (.expand buffered ^int n))
+(defn drop [n ^basinet.Buffer buffered] (.drop buffered ^int n))
+(defn expand [n ^basinet.Buffer buffered] (.expand buffered ^int n))
 
-(defn size [^basinet.Buffered buffered] (.size buffered))
+(defn size [^basinet.Buffer buffered] (.size buffered))
 
 (defn byte-buffer [size-or-coll]
   (let [buffer (if (integer? size-or-coll)
@@ -55,8 +50,32 @@
     (when (integer? size-or-coll) (.limit buffer 0))
     (basinet.nio.ByteBuffer. buffer)))
 
-(defn get [^basinet.BufferedSource buffer index]
+(defn get [^basinet.BufferSource buffer index]
   (.get buffer ^int index))
 
-(defn set [^basinet.BufferedSink buffer index value]
+(defn set [^basinet.BufferSink buffer index value]
   (.set buffer ^int index value))
+
+;;
+;; Wires
+;;
+
+(defn byte-channel-reader [] (basinet.nio.ByteChannelReader$/MODULE$))
+(defn byte-channel-writer [] (basinet.nio.ByteChannelWriter$/MODULE$))
+
+(defmulti converter (fn [from to] [(type (source from))
+                                   (type (sink to))]))
+
+(defmethod converter [basinet.nio.ByteSource
+                      basinet.nio.bytebuffer.Sink]
+  [_ _] (byte-channel-reader))
+
+(defmethod converter [basinet.nio.bytebuffer.Source basinet.nio.ByteSink]
+  [_ _] (byte-channel-writer))
+
+(defn convert ([from to wire] (.convert wire from to))
+  ([from to] (.convert (converter from to) from to)))
+
+(defn chain
+  ([from to converter] (.apply basinet.Chain$/MODULE$ from to converter))
+  ([from to] (chain from to (converter from to))))

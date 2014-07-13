@@ -8,7 +8,8 @@
                    :repl-options {:init (use 'khazad-dum)}}
              :benchmark {:aot :all :jvm-opts ["-server"]}}
   :source-paths ["src/"]
-  :prep-tasks ["scalac"]
+  :java-source-paths ["scala/"]
+  :prep-tasks ["javac" "scalac"]
   :scala-source-path "scala"
   :scala-version "2.10.1"
   :scalac-options {"addparams" "-feature"}

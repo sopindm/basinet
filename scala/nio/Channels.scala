@@ -1,77 +1,52 @@
 package basinet.nio
 
-import java.nio.channels.{Pipe => _, _}
+import java.nio.channels.{Pipe => JPipe, Channel => JChannel, _}
 import java.net._
+import scala.Option
 import scala.annotation.tailrec
 
-class Channel(channel: SelectableChannel) extends basinet.Channel {
-  channel.configureBlocking(false)
+class Channel(channel: JChannel) extends basinet.Channel {
+  if(channel.isInstanceOf[SelectableChannel])
+    channel.asInstanceOf[SelectableChannel].configureBlocking(false)
 
   override def close { if(isOpen) channel.close }
   override def isOpen = channel.isOpen
 }
 
-abstract class Source[T](channel: SelectableChannel) extends Channel(channel)
-    with basinet.SourceChannel[T] {
+abstract class Source[T](channel: JChannel) extends Channel(channel)
+    with basinet.Source[Source[T], T] {
   override def source = this
 }
-abstract class Sink[T](channel: SelectableChannel) extends Channel(channel)
-    with basinet.SinkChannel[T] {
+
+abstract class Sink[T](channel: JChannel) extends Channel(channel)
+    with basinet.Sink[Sink[T], T] {
   override def sink = this
 }
 
-class ByteSource[T <: ReadableByteChannel with SelectableChannel](channel: T)
-    extends Source[Byte](channel) {
-  protected def eof() { close() }
+class ByteSource(val channel: ReadableByteChannel)
+    extends Channel(channel) with basinet.Source[ByteSource, Byte] {
+  override def source = this
+  def eof = close
 
-  override def tryPop = { 
-    val buffer = ByteBuffer(1)
-    if(read(buffer) != 0) Some[Byte](buffer.pop) else None
-  }
-
-  @tailrec
-  private[this] def read(buffer: ByteBuffer, readBefore: Int): Int = {
-    if(!buffer.sink.pushable) return readBefore
-
-    val readNow = channel.read(buffer.sink.buffer)
-    if(readNow == -1) { eof; return readBefore }
-    if(readNow == 0) return readBefore
-
-    buffer.sink.compact
-    buffer.source.expand(readNow)
-    read(buffer, readBefore + readNow)
-  }
-
-  override def read(buffer: basinet.Buffer[Byte]) = buffer match {
-    case bb: ByteBuffer => read(bb, 0)
-    case _ => super.read(buffer)
+  override def tryPop:Option[Byte] = {
+    val buffer = java.nio.ByteBuffer.allocate(1)
+    channel.read(buffer) match {
+      case -1 => { eof; None }
+      case 1 => Some(buffer.get(0))
+      case _ => None
+    }
   }
 }
 
-class ByteSink[T <: WritableByteChannel with SelectableChannel](channel: T)
-    extends Sink[Byte](channel) {
+class ByteSink(val channel: WritableByteChannel)
+    extends Channel(channel) with basinet.Sink[ByteSink, Byte] {
+  override def sink = this
   override def tryPush(value: Byte) = {
-    val buffer = ByteBuffer(1)
-    buffer.push(value)
+    val buffer = java.nio.ByteBuffer.allocate(1)
+    buffer.put(value)
+    buffer.position(0).limit(1)
 
-    write(buffer) == 1
-  }
-
-  @tailrec
-  private[this] def write(buffer: ByteBuffer, writenBefore: Int): Int = {
-    if(!buffer.source.poppable) return writenBefore
-    
-    val writen = channel.write(buffer.source.buffer)
-    if(writen == 0) return writenBefore
-
-    buffer.source.compact
-    buffer.sink.expand(writen)
-    write(buffer, writenBefore + writen)
-  }
-
-  override def write(buffer: basinet.Buffer[Byte]) = buffer match {
-    case bb: ByteBuffer => write(bb, 0)
-    case _ => super.write(buffer)
+    channel.write(buffer) == 1
   }
 }
 
@@ -100,15 +75,17 @@ object TcpAddress {
 }
 
 trait TcpAddressable {
-  def localAddress: scala.Option[TcpAddress]
-  def remoteAddress: scala.Option[TcpAddress]
+  def localAddress: Option[TcpAddress]
+  def remoteAddress: Option[TcpAddress]
 }
 
 class TcpSocket(channel: java.nio.channels.SocketChannel)
-    extends basinet.PipeChannel[Byte] with TcpAddressable {
+    extends basinet.Pipe[ByteSource, ByteSink, Byte]
+    with TcpAddressable {
   self: TcpSocket =>
 
-  channel.setOption[java.lang.Boolean](java.net.StandardSocketOptions.TCP_NODELAY, true)
+  channel.setOption[java.lang.Boolean](
+    java.net.StandardSocketOptions.TCP_NODELAY, true)
 
   @volatile
   private[this] var _readable = true
@@ -129,12 +106,12 @@ class TcpSocket(channel: java.nio.channels.SocketChannel)
   override val source = new ByteSource(channel) with TcpAddressable {
     override def isOpen = self.isOpen && _readable
 
+    override def eof = self.close
+
     override def close {
       _readable = false
       if(!_writable) channel.close
     }
-
-    override def eof { channel.close }
 
     override def localAddress = self.localAddress
     override def remoteAddress = self.remoteAddress
@@ -157,11 +134,10 @@ object TcpSocket {
   def apply(channel: SocketChannel) = new TcpSocket(channel)
 }
 
-class TcpAcceptor(channel: ServerSocketChannel)
-    extends Source[basinet.PipeChannel[Byte]](channel) with TcpAddressable {
+class TcpAcceptor(channel: ServerSocketChannel) 
+    extends Source[TcpSocket](channel) with TcpAddressable {
   override def tryPop = {
     val socket = channel.accept
-
     if(socket != null) Some(TcpSocket(socket)) else None
   }
 
@@ -170,7 +146,7 @@ class TcpAcceptor(channel: ServerSocketChannel)
 }
 
 class TcpConnector(channel: SocketChannel, remote: SocketAddress)
-    extends Source[basinet.PipeChannel[Byte]](channel) with TcpAddressable {
+    extends Source[TcpSocket](channel) with TcpAddressable {
   var connected = channel.connect(remote)
   var read = false
 
@@ -189,5 +165,46 @@ class TcpConnector(channel: SocketChannel, remote: SocketAddress)
   override def remoteAddress = {
     val address = channel.getRemoteAddress
     if(address != null) Some(TcpAddress(address)) else None
+  }
+}
+
+object ByteChannelReader
+    extends basinet.Wire[ByteSource, bytebuffer.Sink] {
+  @tailrec
+  private[this]
+  def read(source: ByteSource,
+           buffer: java.nio.ByteBuffer, 
+           totalRead: Int): Int = {
+    var readLast = source.channel.read(buffer)
+    if(readLast < 0) { source.eof; totalRead }
+    else if(readLast == 0) totalRead
+    else read(source, buffer, totalRead + readLast)
+  }
+
+  override def _convert(source: ByteSource, sink: bytebuffer.Sink) = {
+    val got = read(source, sink.buffer.duplicate, 0)
+    sink.drop(got)
+    if(sink.size > 0) basinet.Result.UNDERFLOW
+    else basinet.Result.OVERFLOW
+  }
+}
+
+object ByteChannelWriter
+    extends basinet.Wire[bytebuffer.Source, ByteSink] {
+  @tailrec
+  private[this]
+  def write(sink: ByteSink,
+            buffer: java.nio.ByteBuffer,
+            totalWriten: Int): Int = {
+    var writen = sink.channel.write(buffer)
+    if(writen == 0) totalWriten
+    else write(sink, buffer, totalWriten + writen)
+  }
+
+  override def _convert(source: bytebuffer.Source, sink: ByteSink) = {
+    val got = write(sink, source.buffer.duplicate, 0)
+    source.drop(got)
+    if(source.size > 0) basinet.Result.OVERFLOW
+    else basinet.Result.UNDERFLOW
   }
 }

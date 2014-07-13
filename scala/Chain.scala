@@ -1,45 +1,59 @@
 package basinet
 
 object Chain {
-  def apply[T](channel: SourceChannel[T], buffer: Buffer[T]) = new BufferedSource[T] with Channel {
-    override def source = buffer
+  def apply[SR <: Source[SR, T],
+            BSR <: BufferSource[BSR, T],
+            BSN <: BufferSink[BSN, T], T]
+    (channel: Source[SR, T],
+     buffer: Pipe[BSR, BSN, T],
+     wire: Wire[SR, BSN])
+  = new BufferSource[BSR, T] {
+    override def source = buffer.source
 
     override def isOpen = channel.isOpen
     override def close = channel.close
-
-    override def update { channel.read(buffer) }
 
     override def poppable = channel.isOpen
 
-    override def tryPop = if(buffer.poppable) buffer.tryPop
-    else if(channel.isOpen) { update; buffer.tryPop }
+    override def update: Unit = wire.convert(channel.source, buffer.sink)
+
+    override def tryPop = if(buffer.source.poppable)
+      buffer.source.tryPop
+    else if(channel.isOpen) { update; buffer.source.tryPop }
     else None
 
-    override def drop(n: Int) = buffer.drop(n)
-    override def expand(n: Int) = buffer.expand(n)
-    override def size = buffer.size
+    override def drop(n: Int) = buffer.source.drop(n)
+    override def expand(n: Int) = buffer.source.expand(n)
+    override def size = buffer.source.size
 
-    override def get(index: Int) = buffer.get(index)
+    override def get(index: Int) = buffer.source.get(index)
   }
 
-  def apply[T](buffer: Buffer[T], channel: SinkChannel[T]) = new BufferedSink[T] with Channel {
+  def apply[BSR <: BufferSource[BSR, T],
+            BSN <: BufferSink[BSN, T],
+            SN <: Sink[SN, T], T] 
+    (buffer: Pipe[BSR, BSN, T],
+     channel: Sink[SN, T],
+     wire: Wire[BSR, SN])
+  = new BufferSink[BSN, T] {
     override def isOpen = channel.isOpen
     override def close = channel.close
 
-    override def sink = buffer
+    override def sink = buffer.sink
 
-    override def update { channel.write(buffer) }
+    override def update: Unit = wire.convert(buffer.source, channel.sink)
 
     override def tryPush(value: T) = {
-      val result = buffer.tryPush(value)
+      val result = buffer.sink.tryPush(value)
       update
       result
     }
 
-    override def drop(n: Int) = { buffer.expand(n) }
-    override def expand(n: Int) = { buffer.drop(n) }
+    override def drop(n: Int) = buffer.sink.drop(n)
+    override def expand(n: Int) =  buffer.sink.expand(n)
     override def size = buffer.sink.size
 
-    override def set(index: Int, value: T) = buffer.set(index, value)
+    override def set(index: Int, value: T) =
+      buffer.sink.set(index, value)
   }
 }
