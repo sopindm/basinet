@@ -126,30 +126,36 @@
     (?= (b/convert pipe buffer) basinet.Result/OVERFLOW)
     (dotimes [i 10] (?= (b/pop buffer) (- i 5)))))
 
-;;reading and writing overflow/underflow edge
+(deftest reading-and-writing-with-underflow-and-overflow
+  (with-open [pipe (b/pipe)
+              buffer (b/byte-buffer 10)]
+    (dotimes [i 9] (b/push pipe (byte i)))
+    (?= (b/convert pipe buffer) basinet.Result/UNDERFLOW)
+    (?= (b/convert buffer pipe) basinet.Result/UNDERFLOW)
+    (?= (b/convert pipe (b/byte-buffer 5)) basinet.Result/OVERFLOW)
+    (?= (b/convert (b/byte-buffer (byte-array 100000)) pipe) basinet.Result/OVERFLOW)))
 
-(comment
-  (deftest writing-from-buffer-circular
-    (let [buffer (b/byte-buffer 10)]
-      (dotimes [i 7] (b/push buffer (byte 0)))
-      (dotimes [i 7] (b/pop buffer))
-      (dotimes [i 9] (b/push buffer (byte (* 3 i))))
-      (with-open [pipe (b/pipe)]
-        (?= (b/write (b/sink pipe) buffer) 9)
-        (dotimes [i 9] (?= (b/pop (b/source pipe)) (* i 3))))
-      (?= (b/size (b/source buffer)) 0)
-      (?= (b/size (b/sink buffer)) 10)))
-
-  (deftest reading-to-buffer-circular
+(deftest writing-from-buffer-circular
+  (let [buffer (b/byte-buffer 10)]
+    (dotimes [i 7] (b/push buffer (byte 0)))
+    (dotimes [i 7] (b/pop buffer))
+    (dotimes [i 9] (b/push buffer (byte (* 3 i))))
     (with-open [pipe (b/pipe)]
-      (dotimes [i 7] (b/push (b/sink pipe) (byte (* i i))))
-      (let [buffer (b/byte-buffer 10)]
-        (dotimes [i 8] (b/push buffer (byte 0)))
-        (dotimes [i 8] (b/pop buffer))
-        (?= (b/read (b/source pipe) buffer) 7)
-        (?= (b/size (b/source buffer)) 7)
-        (?= (b/size (b/sink buffer)) 3)
-        (dotimes [i 7] (?= (b/pop buffer) (byte (* i i))))))))
+      (?= (b/convert buffer pipe) basinet.Result/UNDERFLOW)
+      (dotimes [i 3] (?= (b/pop (b/source pipe)) (* i 3))))
+    (?= (b/size (b/source buffer)) 0)
+    (?= (b/size (b/sink buffer)) 10)))
+
+(deftest reading-to-buffer-circular
+  (with-open [pipe (b/pipe)]
+    (dotimes [i 7] (b/push (b/sink pipe) (byte (* i i))))
+    (let [buffer (b/byte-buffer 10)]
+      (dotimes [i 8] (b/push buffer (byte 0)))
+      (dotimes [i 8] (b/pop buffer))
+      (?= (b/convert pipe buffer) basinet.Result/UNDERFLOW)
+      (?= (b/size (b/source buffer)) 7)
+      (?= (b/size (b/sink buffer)) 3)
+      (dotimes [i 7] (?= (b/pop buffer) (byte (* i i)))))))
 
 ;;buffer has capacity, size and free space
 ;;direct buffers

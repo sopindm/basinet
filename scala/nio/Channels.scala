@@ -168,19 +168,16 @@ object ByteChannelReader
     extends basinet.Wire[ByteSource, bytebuffer.Sink] {
   @tailrec
   private[this]
-  def read(source: ByteSource,
-           buffer: java.nio.ByteBuffer, 
-           totalRead: Int): Int = {
-    var readLast = source.channel.read(buffer)
+  def read(source: ByteSource, sink: bytebuffer.Sink, totalRead: Int): Int = {
+    var readLast = source.channel.read(sink.buffer.duplicate)
     if(readLast < 0) { source.eof; totalRead }
     else if(readLast == 0) totalRead
-    else read(source, buffer, totalRead + readLast)
+    else { sink.drop(readLast); read(source, sink, totalRead + readLast) }
   }
 
   override def _convert(source: ByteSource, sink: bytebuffer.Sink) = {
     sink.requireOpen
-    val got = read(source, sink.buffer.duplicate, 0)
-    sink.drop(got)
+    val got = read(source, sink, 0)
     if(sink.size > 0) basinet.Result.UNDERFLOW
     else basinet.Result.OVERFLOW
   }
@@ -190,18 +187,15 @@ object ByteChannelWriter
     extends basinet.Wire[bytebuffer.Source, ByteSink] {
   @tailrec
   private[this]
-  def write(sink: ByteSink,
-            buffer: java.nio.ByteBuffer,
-            totalWriten: Int): Int = {
-    var writen = sink.channel.write(buffer)
+  def write(sink: ByteSink, source: bytebuffer.Source, totalWriten: Int): Int = {
+    var writen = sink.channel.write(source.buffer.duplicate)
     if(writen == 0) totalWriten
-    else write(sink, buffer, totalWriten + writen)
+    else { source.drop(writen); write(sink, source, totalWriten + writen) }
   }
 
   override def _convert(source: bytebuffer.Source, sink: ByteSink) = {
     source.requireOpen
-    val got = write(sink, source.buffer.duplicate, 0)
-    source.drop(got)
+    val got = write(sink, source, 0)
     if(source.size > 0) basinet.Result.OVERFLOW
     else basinet.Result.UNDERFLOW
   }
