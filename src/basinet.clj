@@ -1,7 +1,7 @@
 (ns basinet
   (:require [basinet.scala :as scala])
   (:refer-clojure :exclude [pop read drop get set])
-  (:import [java.nio ByteBuffer]))
+  (:import [java.nio ByteBuffer CharBuffer]))
 
 ;;
 ;; Basic channel functions
@@ -47,12 +47,15 @@
 
 (defn size [^basinet.Buffer buffered] (.size buffered))
 
-(defn byte-buffer [size-or-coll]
-  (let [buffer (if (integer? size-or-coll)
-                 (ByteBuffer/allocate size-or-coll)
-                 (ByteBuffer/wrap size-or-coll))]
-    (when (integer? size-or-coll) (.limit buffer 0))
-    (basinet.nio.ByteBuffer. buffer)))
+(defmacro -buffer [class size-or-coll]
+  `(let [buffer# (if (integer? ~size-or-coll)
+                   (~(symbol (name class) "allocate") ~size-or-coll)
+                   (~(symbol (name class) "wrap") ~size-or-coll))]
+     (when (integer? ~size-or-coll) (.limit buffer# 0))
+     buffer#))
+
+(defn byte-buffer [size-or-coll] (basinet.nio.byte.BufferPipe. (-buffer ByteBuffer size-or-coll)))
+(defn char-buffer [size-or-coll] (basinet.nio.char.BufferPipe. (-buffer CharBuffer size-or-coll)))
 
 (defn get [^basinet.BufferSource buffer index]
   (.get buffer ^int index))
@@ -67,14 +70,17 @@
 (defn byte-channel-reader [] (basinet.nio.ByteChannelReader$/MODULE$))
 (defn byte-channel-writer [] (basinet.nio.ByteChannelWriter$/MODULE$))
 
+(defn bytes->chars [charset] (basinet.nio.CharsetDecoder. charset))
+(defn chars->bytes [charset] (basinet.nio.CharsetEncoder. charset))
+
 (defmulti converter (fn [from to] [(type (source from))
                                    (type (sink to))]))
 
 (defmethod converter [basinet.nio.ByteSource
-                      basinet.nio.bytebuffer.Sink]
+                      basinet.nio.byte.BufferSink]
   [_ _] (byte-channel-reader))
 
-(defmethod converter [basinet.nio.bytebuffer.Source basinet.nio.ByteSink]
+(defmethod converter [basinet.nio.byte.BufferSource basinet.nio.ByteSink]
   [_ _] (byte-channel-writer))
 
 (defn convert ([from to wire] (.convert wire from to))

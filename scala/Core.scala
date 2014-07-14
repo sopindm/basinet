@@ -56,6 +56,9 @@ trait Sink[SN <: Sink[SN, T], T] extends Channel {
 
 trait Pipe[SR <: Source[SR, T], SN <: Sink[SN, T], T]
     extends Source[SR, T] with Sink[SN, T] {
+  override def isOpen = source.isOpen || sink.isOpen
+  override def close { source.close; sink.close }
+
   override def push(value: T) = sink.push(value)
   override def pushIn(value: T, milliseconds: Int) = sink.pushIn(value, milliseconds)
   override def tryPush(value: T) = sink.tryPush(value)
@@ -73,9 +76,6 @@ class PipeOf[SR <: Source[SR, T], SN <: Sink[SN, T], T]
     extends Pipe[SR, SN, T] {
   override def source = _source.source
   override def sink = _sink.sink
-
-  override def isOpen = _source.isOpen || _sink.isOpen
-  override def close { _source.close; _sink.close }
 }
 
 object PipeOf {

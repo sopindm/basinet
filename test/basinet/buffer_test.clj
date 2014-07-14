@@ -24,7 +24,8 @@
     (?true (.pushable b))
     (b/expand 5 (b/source b))
     (?true (.poppable b))
-    (?false (.pushable b))))0
+    (?false (.pushable b))))
+
 (deftest popping-from-empty-buffer
   (let [buffer (b/byte-buffer 1)]
     (?= (b/try-pop buffer) nil)
@@ -156,6 +157,58 @@
       (?= (b/size (b/source buffer)) 7)
       (?= (b/size (b/sink buffer)) 3)
       (dotimes [i 7] (?= (b/pop buffer) (byte (* i i)))))))
+
+(deftest making-char-buffer
+  (with-open [b (b/char-buffer 10)]
+    (doseq [c "hello"] (b/push b c))
+    (?= (apply str (repeatedly 5 #(b/pop b))) "hello")))
+
+(deftest get-and-set-for-char-buffers
+  (with-open [b (b/char-buffer 10)]
+    (doall (map-indexed (fn [i c] (b/set (b/sink b) i c)) "Hello!!!"))
+    (b/drop 8 (b/sink b))
+    (dotimes [i 8] (?= (b/get (b/source b) i) (nth "Hello!!!" i)))))
+
+;;
+;; Byte <-> Char conversion wires
+;;
+
+(defn- unicode-charset [] (java.nio.charset.Charset/forName "UTF-8"))
+
+(deftest converting-simple-byte-buffer-to-chars
+  (with-open [bytes (b/byte-buffer (byte-array (map byte (range 97 100))))
+              chars (b/char-buffer 3)]
+    (?= (b/convert bytes chars (b/bytes->chars (unicode-charset))) basinet.Result/UNDERFLOW)
+    (dotimes [i 3] (?= (b/pop (b/source chars)) (nth "abc" i)))))
+
+(deftest converting-byte-buffer-to-chars-with-overflow
+  (with-open [bytes (b/byte-buffer (byte-array (map byte (range 97 100))))
+              chars (b/char-buffer 1)]
+    (?= (b/convert bytes chars (b/bytes->chars (unicode-charset))) basinet.Result/OVERFLOW)))
+
+(deftest converting-big-byte-sequence-to-char
+  (with-open [bytes (b/byte-buffer (byte-array (map byte [-48 -102])))
+              chars (b/char-buffer 1)]
+    (?= (b/convert bytes chars (b/bytes->chars (unicode-charset))) basinet.Result/UNDERFLOW)
+    (?= (int (b/pop chars)) 1050)))
+
+(deftest converting-chars-to-bytes
+  (let [chars (b/char-buffer (char-array "hi!!!"))
+        bytes (b/byte-buffer 5)]
+    (?= (b/convert chars bytes (b/chars->bytes (unicode-charset))) basinet.Result/UNDERFLOW)
+    (dotimes [i 5] (?= (b/pop bytes) (nth [104 105 33 33 33] i)))))
+
+(deftest converting-chars-to-bytes-with-overflow
+  (let [chars (b/char-buffer (char-array "hi!!!"))
+        bytes (b/byte-buffer 2)]
+    (?= (b/convert chars bytes (b/chars->bytes (unicode-charset))) basinet.Result/OVERFLOW)
+    (dotimes [i 2] (?= (b/pop bytes) (nth [104 105] i)))))
+
+(deftest converting-big-char-to-bytes
+  (let [chars (b/char-buffer (char-array [(char 1050)]))
+        bytes (b/byte-buffer 2)]
+    (?= (b/convert chars bytes (b/chars->bytes (unicode-charset))) basinet.Result/UNDERFLOW)
+    (dotimes [i 2] (?= (b/pop bytes) (nth [-48 -102] i)))))
 
 ;;buffer has capacity, size and free space
 ;;direct buffers

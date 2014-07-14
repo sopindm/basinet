@@ -30,8 +30,8 @@ class ByteSource(val channel: ReadableByteChannel)
   def eof = close
 
   override def tryPop:Option[Byte] = {
-    val buffer = ByteBuffer(1)
-    if(ByteChannelReader.convert(this, buffer) == Result.OVERFLOW)
+    val buffer = byte.Buffer(1)
+    if(ByteChannelReader.convert(this, buffer.sink) == Result.OVERFLOW)
       Some(buffer.pop)
     else None
   }
@@ -41,7 +41,7 @@ class ByteSink(val channel: WritableByteChannel)
     extends Channel(channel) with basinet.Sink[ByteSink, Byte] {
   override def sink = this
   override def tryPush(value: Byte) = {
-    val buffer = ByteBuffer(1); buffer.push(value)
+    val buffer = byte.Buffer(1); buffer.push(value)
     ByteChannelWriter.convert(buffer, this) == Result.UNDERFLOW
   }
 }
@@ -165,17 +165,17 @@ class TcpConnector(channel: SocketChannel, remote: SocketAddress)
 }
 
 object ByteChannelReader
-    extends basinet.Wire[ByteSource, bytebuffer.Sink] {
+    extends basinet.Wire[ByteSource, BufferSink[java.nio.ByteBuffer, Byte]] {
   @tailrec
   private[this]
-  def read(source: ByteSource, sink: bytebuffer.Sink, totalRead: Int): Int = {
+  def read(source: ByteSource, sink: BufferSink[java.nio.ByteBuffer, Byte], totalRead: Int): Int = {
     var readLast = source.channel.read(sink.buffer.duplicate)
     if(readLast < 0) { source.eof; totalRead }
     else if(readLast == 0) totalRead
     else { sink.drop(readLast); read(source, sink, totalRead + readLast) }
   }
 
-  override def _convert(source: ByteSource, sink: bytebuffer.Sink) = {
+  override def _convert(source: ByteSource, sink: BufferSink[java.nio.ByteBuffer, Byte]) = {
     sink.requireOpen
     val got = read(source, sink, 0)
     if(sink.size > 0) basinet.Result.UNDERFLOW
@@ -184,16 +184,16 @@ object ByteChannelReader
 }
 
 object ByteChannelWriter
-    extends basinet.Wire[bytebuffer.Source, ByteSink] {
+    extends basinet.Wire[BufferSource[java.nio.ByteBuffer, Byte], ByteSink] {
   @tailrec
   private[this]
-  def write(sink: ByteSink, source: bytebuffer.Source, totalWriten: Int): Int = {
+  def write(sink: ByteSink, source: BufferSource[java.nio.ByteBuffer, Byte], totalWriten: Int): Int = {
     var writen = sink.channel.write(source.buffer.duplicate)
     if(writen == 0) totalWriten
     else { source.drop(writen); write(sink, source, totalWriten + writen) }
   }
 
-  override def _convert(source: bytebuffer.Source, sink: ByteSink) = {
+  override def _convert(source: BufferSource[java.nio.ByteBuffer, Byte], sink: ByteSink) = {
     source.requireOpen
     val got = write(sink, source, 0)
     if(source.size > 0) basinet.Result.OVERFLOW
