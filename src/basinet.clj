@@ -42,20 +42,31 @@
 ;; Buffers
 ;;
   
-(defn drop [n ^basinet.Buffer buffered] (.drop buffered ^int n))
-(defn expand [n ^basinet.Buffer buffered] (.expand buffered ^int n))
+(defn drop [n ^basinet.Buffer buffered] (.drop buffered ^int n) buffered)
+(defn expand [n ^basinet.Buffer buffered] (.expand buffered ^int n) buffered)
 
 (defn size [^basinet.Buffer buffered] (.size buffered))
 
-(defmacro -buffer [class size-or-coll]
+(defmacro -buffer [class size-or-coll compaction-threshold]
   `(let [buffer# (if (integer? ~size-or-coll)
                    (~(symbol (name class) "allocate") ~size-or-coll)
                    (~(symbol (name class) "wrap") ~size-or-coll))]
-     (when (integer? ~size-or-coll) (.limit buffer# 0))
+     (if (integer? ~size-or-coll)
+       (.limit buffer# 0)
+       (.limit buffer# (- (.capacity buffer#) ~compaction-threshold)))
      buffer#))
 
-(defn byte-buffer [size-or-coll] (basinet.nio.byte.BufferPipe. (-buffer ByteBuffer size-or-coll)))
-(defn char-buffer [size-or-coll] (basinet.nio.char.BufferPipe. (-buffer CharBuffer size-or-coll)))
+(defn byte-buffer 
+  ([size-or-coll] (byte-buffer size-or-coll 0))
+  ([size-or-coll compaction-threshold]
+     (basinet.nio.byte.BufferPipe. (-buffer ByteBuffer size-or-coll compaction-threshold)
+                                   compaction-threshold)))
+
+(defn char-buffer
+  ([size-or-coll] (char-buffer size-or-coll 0))
+  ([size-or-coll compaction-threshold]
+     (basinet.nio.char.BufferPipe. (-buffer CharBuffer size-or-coll compaction-threshold)
+                                   compaction-threshold)))
 
 (defn get [^basinet.BufferSource buffer index]
   (.get buffer ^int index))

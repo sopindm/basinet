@@ -192,6 +192,17 @@
     (?= (b/convert bytes chars (b/bytes->chars (unicode-charset))) basinet.Result/UNDERFLOW)
     (?= (int (b/pop chars)) 1050)))
 
+(comment
+(deftest converting-bytes-to-char-circurlar
+  (with-open [bytes (b/byte-buffer 2)
+              chars (b/char-buffer 1)]
+    (b/expand 1 (b/drop 1 (b/sink bytes)))
+    (b/push bytes (byte -48))
+    (b/push bytes (byte -102))
+    (?= (b/convert bytes chars (b/bytes->chars (unicode-charset))) basinet.Result/UNDERFLOW)
+    (?true (b/poppable chars))
+    (?= (int (b/pop chars)) 1050))))
+
 (deftest converting-chars-to-bytes
   (let [chars (b/char-buffer (char-array "hi!!!"))
         bytes (b/byte-buffer 5)]
@@ -210,13 +221,34 @@
     (?= (b/convert chars bytes (b/chars->bytes (unicode-charset))) basinet.Result/UNDERFLOW)
     (dotimes [i 2] (?= (b/pop bytes) (nth [-48 -102] i)))))
 
-;;buffer has capacity, size and free space
-;;direct buffers
-;;read/write covariance/contravariance
+;;
+;; Compaction threshold
+;;
 
-;;default write implementation for buffers
-;;buffers have compaction threshold
-;;buffers have random access
+(deftest making-buffer-with-compaction-threshold
+  (let [b (b/byte-buffer 10 2)]
+    (?= (-> b b/source .begin) 2)
+    (?= (-> b b/source .size) 0)
+    (?= (-> b b/sink .begin) 2)
+    (?= (-> b b/sink .size) 8))
+  (let [b (b/byte-buffer (byte-array 10) 2)]
+    (?= (-> b b/source .begin) 2)
+    (?= (-> b b/source .size) 8)
+    (?= (-> b b/sink .begin) 2)
+    (?= (-> b b/sink .size) 0)))
+
+(deftest compacting-buffer-source
+  (let [b (b/byte-buffer 10 2)]
+    (dotimes [i 8] (b/set (b/sink b) i (byte i)))
+    (b/drop 8 (b/sink b))
+    (b/drop 6 (b/source b))
+    (?= (-> b b/source .begin) 0)
+    (?= (-> b b/source .end) 2)
+    (?= (b/get (b/source b) 0) 6)
+    (?= (b/get (b/source b) 1) 7)))
+
+;;buffer has capacity
+;;direct buffers
 
 
 

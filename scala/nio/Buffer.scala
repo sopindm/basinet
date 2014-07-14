@@ -4,7 +4,7 @@ import java.nio.{Buffer => JBuffer,ByteBuffer=>JByteBuffer, CharBuffer => JCharB
 import java.nio.charset._
 import scala.annotation.tailrec
 
-class Buffer[T <: JBuffer](buffer: T) extends basinet.BufferLike
+class Buffer[T <: JBuffer](buffer: T, override val compactionThreshold: Int) extends basinet.BufferLike
     with basinet.ChannelLike {
   override def begin = buffer.position
   override def end = buffer.limit
@@ -16,18 +16,19 @@ class Buffer[T <: JBuffer](buffer: T) extends basinet.BufferLike
 }
 
 abstract class BufferSource[B <: JBuffer, T]
-  (val buffer: B, pipe: basinet.Pipe[BufferSource[B, T], BufferSink[B, T], T])
-    extends Buffer[B](buffer)
+  (val buffer: B, pipe: basinet.Pipe[BufferSource[B, T], BufferSink[B, T], T], compactionThreshold: Int)
+    extends Buffer[B](buffer, compactionThreshold)
     with basinet.BufferSourceLike[BufferSource[B, T], BufferSink[B, T], T] {
+  buffer.limit(buffer.limit + compactionThreshold).position(buffer.position + compactionThreshold)
   override def source = this
   override def sink = pipe.sink
 }
 
 abstract class BufferSink[B <: JBuffer, T]
-  (val buffer: B, pipe: basinet.Pipe[BufferSource[B, T], BufferSink[B, T], T])
-    extends Buffer[B](buffer)
+  (val buffer: B, pipe: basinet.Pipe[BufferSource[B, T], BufferSink[B, T], T], compactionThreshold: Int)
+    extends Buffer[B](buffer, compactionThreshold)
     with basinet.BufferSinkLike[BufferSource[B, T], BufferSink[B, T], T] {
-  buffer.position(buffer.limit).limit(buffer.capacity)
+  buffer.limit(buffer.limit + compactionThreshold).position(buffer.limit).limit(buffer.capacity)
   drop(0)
 
   override def sink = this
@@ -38,46 +39,54 @@ abstract class BufferPipe[B <: JBuffer, T](buffer: B)
     extends basinet.Pipe[BufferSource[B, T], BufferSink[B, T], T]
 
 package byte {
-  class BufferSource(buffer: JByteBuffer, pipe: basinet.nio.BufferPipe[JByteBuffer, Byte])
-      extends basinet.nio.BufferSource[JByteBuffer, Byte](buffer, pipe) {
+  class BufferSource(buffer: JByteBuffer,
+                     pipe: basinet.nio.BufferPipe[JByteBuffer, Byte],
+                     compactionThreshold: Int)
+      extends basinet.nio.BufferSource[JByteBuffer, Byte](buffer, pipe, compactionThreshold) {
     override def absoluteGet(index: Int) = buffer.get(index)
   }
 
-  class BufferSink(buffer: JByteBuffer, pipe: basinet.nio.BufferPipe[JByteBuffer, Byte])
-      extends basinet.nio.BufferSink[JByteBuffer, Byte](buffer, pipe) {
+  class BufferSink(buffer: JByteBuffer,
+                   pipe: basinet.nio.BufferPipe[JByteBuffer, Byte],
+                   compactionThreshold: Int)
+      extends basinet.nio.BufferSink[JByteBuffer, Byte](buffer, pipe, compactionThreshold) {
     override def absoluteSet(index: Int, value: Byte) = buffer.put(index, value)
   }
 
-  class BufferPipe(buffer: java.nio.ByteBuffer)
+  class BufferPipe(buffer: java.nio.ByteBuffer, compactionThreshold: Int)
       extends basinet.nio.BufferPipe[JByteBuffer, Byte](buffer) {
-    override val source = new BufferSource(buffer.duplicate, this)
-    override val sink = new BufferSink(buffer.duplicate, this)
+    override val source = new BufferSource(buffer.duplicate, this, compactionThreshold)
+    override val sink = new BufferSink(buffer.duplicate, this, compactionThreshold)
   }
 
   object Buffer {
     def apply(n: Int) = {
       val buffer = java.nio.ByteBuffer.allocate(n)
       buffer.limit(0)
-      new BufferPipe(buffer)
+      new BufferPipe(buffer, 0)
     }
   }
 }
 
 package char {
-  class BufferSource(buffer: JCharBuffer, pipe: basinet.nio.BufferPipe[JCharBuffer, Character])
-      extends basinet.nio.BufferSource[JCharBuffer, Character](buffer, pipe) {
+  class BufferSource(buffer: JCharBuffer,
+                     pipe: basinet.nio.BufferPipe[JCharBuffer, Character],
+                     compactionThreshold: Int)
+      extends basinet.nio.BufferSource[JCharBuffer, Character](buffer, pipe, compactionThreshold) {
     override def absoluteGet(index: Int) = buffer.get(index)
   }
 
-  class BufferSink(buffer: JCharBuffer, pipe: basinet.nio.BufferPipe[JCharBuffer, Character])
-      extends basinet.nio.BufferSink[JCharBuffer, Character](buffer, pipe) {
+  class BufferSink(buffer: JCharBuffer,
+                   pipe: basinet.nio.BufferPipe[JCharBuffer, Character],
+                   compactionThreshold: Int)
+      extends basinet.nio.BufferSink[JCharBuffer, Character](buffer, pipe, compactionThreshold) {
     override def absoluteSet(index: Int, value: Character) = buffer.put(index, value)
   }
 
-  class BufferPipe(buffer: java.nio.CharBuffer)
+  class BufferPipe(buffer: java.nio.CharBuffer, compactionThreshold: Int)
       extends basinet.nio.BufferPipe[JCharBuffer, Character](buffer) {
-    override val source = new BufferSource(buffer.duplicate, this)
-    override val sink = new BufferSink(buffer.duplicate, this)
+    override val source = new BufferSource(buffer.duplicate, this, compactionThreshold)
+    override val sink = new BufferSink(buffer.duplicate, this, compactionThreshold)
   }
 }
 

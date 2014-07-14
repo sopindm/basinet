@@ -21,16 +21,25 @@ trait BufferLike extends Buffer {
 
   def reset(begin: Int, end: Int): Unit
 
+  def compactionThreshold: Int
+
+  def compact {
+    val newBegin = compactionThreshold - (capacity - begin)
+    reset(newBegin, newBegin + size)
+  }
+
   override def drop(n: Int) {
     requireOpen
     if(begin + n >= capacity) {
       val newSize = size - n
-      val newBegin = begin + n - capacity
+      val newBegin = begin + n - capacity + compactionThreshold
 
       reset(newBegin, newBegin + newSize)
       tail = 0
     }
     else reset(begin + n, end)
+
+    if(begin >= capacity - compactionThreshold) compact
   }
 
   override def expand(n: Int) {
