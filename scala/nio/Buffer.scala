@@ -4,8 +4,8 @@ import java.nio.{Buffer => JBuffer,ByteBuffer=>JByteBuffer, CharBuffer => JCharB
 import java.nio.charset._
 import scala.annotation.tailrec
 
-class Buffer[T <: JBuffer](buffer: T, override val compactionThreshold: Int) extends basinet.BufferLike
-    with basinet.ChannelLike {
+abstract class Buffer[B <: JBuffer](buffer: B, override val compactionThreshold: Int)
+    extends basinet.BufferLike with basinet.ChannelLike {
   override def begin = buffer.position
   override def end = buffer.limit
   override def capacity = buffer.capacity
@@ -44,6 +44,7 @@ package byte {
                      compactionThreshold: Int)
       extends basinet.nio.BufferSource[JByteBuffer, Byte](buffer, pipe, compactionThreshold) {
     override def absoluteGet(index: Int) = buffer.get(index)
+    override def copy(to: Int, from: Int, size: Int) = Buffer.copy(buffer, to, from, size)
   }
 
   class BufferSink(buffer: JByteBuffer,
@@ -51,6 +52,7 @@ package byte {
                    compactionThreshold: Int)
       extends basinet.nio.BufferSink[JByteBuffer, Byte](buffer, pipe, compactionThreshold) {
     override def absoluteSet(index: Int, value: Byte) = buffer.put(index, value)
+    override def copy(to: Int, from: Int, size: Int) = Buffer.copy(buffer, to, from, size)
   }
 
   class BufferPipe(buffer: java.nio.ByteBuffer, compactionThreshold: Int)
@@ -60,6 +62,16 @@ package byte {
   }
 
   object Buffer {
+    def copy(buffer: JByteBuffer, to: Int, from: Int, size: Int) {
+      val dest = buffer.duplicate
+      dest.limit(to + size).position(to)
+
+      val src = buffer.duplicate
+      src.limit(from + size).position(from)
+
+      dest.put(src)
+    }
+
     def apply(n: Int) = {
       val buffer = java.nio.ByteBuffer.allocate(n)
       buffer.limit(0)
@@ -74,6 +86,7 @@ package char {
                      compactionThreshold: Int)
       extends basinet.nio.BufferSource[JCharBuffer, Character](buffer, pipe, compactionThreshold) {
     override def absoluteGet(index: Int) = buffer.get(index)
+    override def copy(to: Int, from: Int, size: Int) = Buffer.copy(buffer, to, from, size)
   }
 
   class BufferSink(buffer: JCharBuffer,
@@ -81,12 +94,25 @@ package char {
                    compactionThreshold: Int)
       extends basinet.nio.BufferSink[JCharBuffer, Character](buffer, pipe, compactionThreshold) {
     override def absoluteSet(index: Int, value: Character) = buffer.put(index, value)
+    override def copy(to: Int, from: Int, size: Int) = Buffer.copy(buffer, to, from, size)
   }
 
   class BufferPipe(buffer: java.nio.CharBuffer, compactionThreshold: Int)
       extends basinet.nio.BufferPipe[JCharBuffer, Character](buffer) {
     override val source = new BufferSource(buffer.duplicate, this, compactionThreshold)
     override val sink = new BufferSink(buffer.duplicate, this, compactionThreshold)
+  }
+
+  object Buffer {
+    def copy(buffer: JCharBuffer, to: Int, from: Int, size: Int) {
+      val dest = buffer.duplicate
+      dest.limit(to + size).position(to)
+
+      val src = buffer.duplicate
+      src.limit(from + size).position(from)
+
+      dest.put(src)
+    }
   }
 }
 
