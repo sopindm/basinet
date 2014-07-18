@@ -88,6 +88,10 @@
 (defn line-source [] (basinet.LineSource.))
 (defn line-writer [] (scala/object basinet.LineWriter))
 
+(defn line-sink ([] (line-sink "\n"))
+  ([newline] (basinet.LineSink. newline)))
+(defn line-reader [] (scala/object basinet.LineReader))
+
 ;;
 ;; Wires
 ;;
@@ -115,6 +119,11 @@
 
 (defmethod converter [Object basinet.any.BufferSink] [_ _] (object-buffer-writer))
 (defmethod converter [basinet.any.BufferSource Object] [_ _] (object-buffer-reader))
+
+(defmethod converter [basinet.nio.char.BufferSource basinet.LineSource] [_ _]
+  (line-writer))
+(defmethod converter [basinet.LineSink basinet.nio.char.BufferSink] [_ _]
+  (line-reader))
 
 (defn convert ([from to wire] (.convert wire from to))
   ([from to] (.convert (converter from to) from to)))

@@ -74,3 +74,50 @@ object LineWriter extends Wire[nio.BufferSource[java.nio.CharBuffer, Character],
   override def _convert(source: nio.BufferSource[java.nio.CharBuffer, Character], sink: LineSource) =
     _write(source, sink)
 }
+
+class LineSink(newline: String) extends SinkLike[LineSink, String]
+    with SourceLike[LineSink, Character] with ChannelLike {
+  private[this] var _string: String = null
+  private[this] var _position = 0
+
+  override def source = this
+  override def sink = this
+
+  override def pushable = super.pushable && _string == null
+  override def _push(value: String) { _string = value.concat(newline); _position = 0 }
+
+  override def poppable = super.poppable && _string != null
+  override def _pop = {
+    val result = _string(_position)
+    _position += 1
+    if(_position == _string.length) _string = null
+    result
+  }
+
+  def pop(buffer: java.nio.CharBuffer) = {
+    val writeLength = scala.math.min(buffer.limit - buffer.position, _string.length - _position)
+
+    buffer.append(_string, _position, _position + writeLength) 
+    _position += writeLength
+    if(_position == _string.length) _string = null
+
+    writeLength
+  }
+}
+
+object LineReader extends Wire[LineSink, nio.BufferSink[java.nio.CharBuffer, Character]] {
+  @tailrec
+  private[this] def _write(from: LineSink,
+                           to: nio.BufferSink[java.nio.CharBuffer, Character]): Result = {
+    if(!from.poppable) return Result.UNDERFLOW
+    if(!to.pushable) return Result.OVERFLOW
+
+    val writen = from.pop(to.buffer.duplicate)
+    to.drop(writen)
+
+    _write(from, to)
+  }
+
+  override def _convert(from: LineSink, to: nio.BufferSink[java.nio.CharBuffer, Character]) =
+    _write(from, to)
+}

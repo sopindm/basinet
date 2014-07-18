@@ -34,12 +34,37 @@
     (?= (b/try-pop ls) "hello")
     (?= (b/convert cb ls (b/line-writer)) basinet.Result/OVERFLOW)
     (?= (b/try-pop ls) "hi")
-    (?= (b/convert cb ls (b/line-writer)) basinet.Result/UNDERFLOW)
+    (?= (b/convert cb ls) basinet.Result/UNDERFLOW)
     (?= (b/try-pop ls) "again!!!")))
 
-;;line sink gets lines and writes characters (newline sequence is parameter)
-;;line sink isn't poppable when has no lines
-;;line sink isn't pushable when has too much lines inside (more than parameter)
-;;buffer sink interface
-;;line reading wire
+(deftest line-sink-reads-strings-and-writes-chars
+  (with-open [sink (b/line-sink)]
+    (b/push sink "hi")
+    (?= (apply str (repeatedly 3 #(b/try-pop sink))) (format "hi%n"))
+    (b/push sink "hello")
+    (?= (apply str (repeatedly 6 #(b/try-pop sink))) (format "hello%n"))))
 
+(deftest line-sink-isnt-popable-when-empty-and-isnt-pushable-when-not
+  (with-open [sink (b/line-sink)]
+    (?false (b/poppable sink))
+    (?true (b/pushable sink))
+    (b/push sink "")
+    (?true (b/poppable sink))
+    (?false (b/pushable sink))
+    (?= (b/pop sink) \newline)
+    (?false (b/poppable sink))
+    (?true (b/pushable sink))))
+
+(deftest line-reading-wire
+  (with-open [ls (b/line-sink)
+              cb (b/char-buffer 10)]
+    (b/push ls "hello from nowhere")
+    (?= (b/convert ls cb (b/line-reader)) basinet.Result/OVERFLOW)
+    (?= (apply str (repeatedly 10 #(b/try-pop cb))) "hello from")
+    (?= (b/convert ls cb) basinet.Result/UNDERFLOW)
+    (?= (apply str (repeatedly 9 #(b/try-pop cb))) (format " nowhere%n"))))
+
+(deftest configurable-newline-sequence-for-line-sink
+  (with-open [s (b/line-sink "!!!")]
+    (b/push s "hi")
+    (?= (apply str (repeatedly 5 #(b/try-pop s))) "hi!!!")))
