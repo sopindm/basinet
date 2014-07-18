@@ -82,6 +82,13 @@
   (.set buffer ^int index value))
 
 ;;
+;; Channels
+;;
+
+(defn line-source [] (basinet.LineSource.))
+(defn line-writer [] (scala/object basinet.LineWriter))
+
+;;
 ;; Wires
 ;;
 

@@ -6,6 +6,8 @@ trait Channel extends java.io.Closeable {
   def isOpen: Boolean
   def close: Unit
 
+  def requireOpen = if(!isOpen) throw new java.nio.channels.ClosedChannelException
+
   def update: Unit = ()
 }
 
@@ -19,6 +21,7 @@ trait Source[SR <: Source[SR, T], T] extends Channel {
   def source: SR
 
   def poppable: Boolean = isOpen
+
   def tryPop: scala.Option[T]
 
   def pop: T = {
@@ -38,6 +41,7 @@ trait Source[SR <: Source[SR, T], T] extends Channel {
     result
   }
 }
+
 trait Sink[SN <: Sink[SN, T], T] extends Channel {
   def sink: SN
 
@@ -52,6 +56,16 @@ trait Sink[SN <: Sink[SN, T], T] extends Channel {
       result = tryPush(value)
     result
   }
+}
+
+trait SourceLike[SR <: SourceLike[SR, T], T] extends Source[SR, T] {
+  def _pop: T
+  override def tryPop = { requireOpen; if(poppable) Some(_pop) else None }
+}
+
+trait SinkLike[SN <: SinkLike[SN, T], T] extends Sink[SN, T] {
+  def _push(value: T): Unit
+  override def tryPush(value: T) = { requireOpen; if(pushable) { _push(value); true } else false }
 }
 
 trait Pipe[SR <: Source[SR, T], SN <: Sink[SN, T], T]
