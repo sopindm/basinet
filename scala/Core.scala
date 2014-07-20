@@ -8,7 +8,7 @@ trait Channel extends java.io.Closeable {
 
   def requireOpen = if(!isOpen) throw new java.nio.channels.ClosedChannelException
 
-  def update: Unit = ()
+  def update: Result = Result.NOTHING
 }
 
 trait ChannelLike extends Channel {
@@ -40,6 +40,8 @@ trait Source[SR <: Source[SR, T], T] extends Channel {
 
     result
   }
+
+  override def update = if(!poppable) Result.UNDERFLOW else super.update
 }
 
 trait Sink[SN <: Sink[SN, T], T] extends Channel {
@@ -56,6 +58,8 @@ trait Sink[SN <: Sink[SN, T], T] extends Channel {
       result = tryPush(value)
     result
   }
+
+  override def update = if(!pushable) Result.OVERFLOW else super.update
 }
 
 trait SourceLike[SR <: SourceLike[SR, T], T] extends Source[SR, T] {

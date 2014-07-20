@@ -104,6 +104,7 @@
 (def -object-buffer-reader (basinet.any.BufferReader.))
 (defn object-buffer-reader [] -object-buffer-reader)
 
+(defn unicode-charset [] (java.nio.charset.Charset/forName "UTF-8"))
 (defn bytes->chars [charset] (basinet.nio.CharsetDecoder. charset))
 (defn chars->bytes [charset] (basinet.nio.CharsetEncoder. charset))
 

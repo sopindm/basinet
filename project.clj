@@ -11,8 +11,8 @@
   :java-source-paths ["scala/"]
   :prep-tasks ["javac" "scalac"]
   :scala-source-path "scala"
-  :scala-version "2.10.1"
+  :scala-version "2.11.1"
   :scalac-options {"addparams" "-feature"}
-  :dependencies [[org.clojure/clojure "1.5.1"]
+  :dependencies [[org.clojure/clojure "1.6.0"]
                  [org.scala-lang/scala-library "2.10.1"]
                  [evil-ant "0.1.0"]])

@@ -15,7 +15,7 @@ object Chain {
 
     override def poppable = channel.isOpen
 
-    override def update: Unit = wire.convert(channel.source, buffer.sink)
+    override def update = wire.convert(channel.source, buffer.sink)
 
     override def tryPop = if(buffer.source.poppable)
       buffer.source.tryPop
@@ -41,7 +41,7 @@ object Chain {
 
     override def sink = buffer.sink
 
-    override def update: Unit = wire.convert(buffer.source, channel.sink)
+    override def update = wire.convert(buffer.source, channel.sink)
 
     override def tryPush(value: T) = {
       val result = buffer.sink.tryPush(value)
