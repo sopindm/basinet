@@ -1,7 +1,8 @@
 (ns basinet.buffer-test
   (:require [khazad-dum :refer :all]
             [basinet :as b])
-  (:import [java.nio.channels ClosedChannelException]))
+  (:import [java.nio.channels ClosedChannelException]
+           [basinet Result]))
 
 (deftest buffer-has-push-and-pop
   (let [buffer (b/byte-buffer 10)]
@@ -78,8 +79,6 @@
     (?false (b/open? s))
     (?false (b/poppable s))
     (?throws (b/get s 0) ClosedChannelException)
-    (with-open [p (b/pipe)]
-      (?throws (b/convert s p) ClosedChannelException))
     (?throws (b/drop 0 s) ClosedChannelException)
     (?throws (b/expand 0 s) ClosedChannelException)))
 
@@ -89,9 +88,7 @@
     (.close s)
     (?false (b/open? s))
     (?false (b/pushable s))
-    (?throws (b/set s 0 (byte 10)) ClosedChannelException)
-    (with-open [p (b/pipe)]
-      (?throws (b/convert p s) ClosedChannelException))))
+    (?throws (b/set s 0 (byte 10)) ClosedChannelException)))
 
 (deftest closing-whole-buffer
   (with-open [b (b/byte-buffer 10)]
@@ -110,37 +107,40 @@
 ;; byte wires
 ;; 
 
+(defmacro ?convert= [[from to & by] result]
+  `(let [from# ~from
+         to# ~to]
+     (?= (b/convert from# to# ~@by) ~result)))
+
 (deftest reading-from-source-channel-to-buffer
   (with-open [pipe (b/pipe)]
     (dotimes [i 10] (-> pipe b/sink (b/push (byte (* i i)))))
     (let [buffer (b/byte-buffer 10)]
-      (?= (b/convert pipe buffer (b/byte-channel-reader))
-          basinet.Result/OVERFLOW)
+      (?convert= [pipe buffer (b/byte-channel-reader)] Result/OVERFLOW)
       (dotimes [i 10] (?= (b/pop buffer) (* i i))))))
 
 (deftest writing-to-channel-from-buffer
     (with-open [pipe (b/pipe)]
       (let [buffer (b/byte-buffer (byte-array (map byte (range 10))))]
-        (?= (b/convert buffer pipe (b/byte-channel-writer))
-            basinet.Result/UNDERFLOW)
+        (?convert= [buffer pipe (b/byte-channel-writer)] Result/UNDERFLOW)
         (dotimes [i 10] (?= (b/pop (b/source pipe)) i)))))
 
 (deftest default-read-and-write-wires
   (with-open [pipe (b/pipe)
               buffer (b/byte-buffer (byte-array
                                      (map byte (range -5 5))))]
-    (?= (b/convert buffer pipe) basinet.Result/UNDERFLOW)
-    (?= (b/convert pipe buffer) basinet.Result/OVERFLOW)
+    (?convert= [buffer pipe] basinet.Result/UNDERFLOW)
+    (?convert= [pipe buffer] basinet.Result/OVERFLOW)
     (dotimes [i 10] (?= (b/pop buffer) (- i 5)))))
 
 (deftest reading-and-writing-with-underflow-and-overflow
   (with-open [pipe (b/pipe)
               buffer (b/byte-buffer 10)]
     (dotimes [i 9] (b/push pipe (byte i)))
-    (?= (b/convert pipe buffer) basinet.Result/UNDERFLOW)
-    (?= (b/convert buffer pipe) basinet.Result/UNDERFLOW)
-    (?= (b/convert pipe (b/byte-buffer 5)) basinet.Result/OVERFLOW)
-    (?= (b/convert (b/byte-buffer (byte-array 100000)) pipe) basinet.Result/OVERFLOW)))
+    (?convert= [pipe buffer] Result/UNDERFLOW)
+    (?convert= [buffer pipe] Result/UNDERFLOW)
+    (?convert= [pipe (b/byte-buffer 5)] basinet.Result/OVERFLOW)
+    (?convert= [(b/byte-buffer (byte-array 100000)) pipe] basinet.Result/OVERFLOW)))
 
 (deftest writing-from-buffer-circular
   (let [buffer (b/byte-buffer 10)]
@@ -148,7 +148,7 @@
     (dotimes [i 7] (b/pop buffer))
     (dotimes [i 9] (b/push buffer (byte (* 3 i))))
     (with-open [pipe (b/pipe)]
-      (?= (b/convert buffer pipe) basinet.Result/UNDERFLOW)
+      (?convert= [buffer pipe] basinet.Result/UNDERFLOW)
       (dotimes [i 3] (?= (b/pop (b/source pipe)) (* i 3))))
     (?= (b/size (b/source buffer)) 0)
     (?= (b/size (b/sink buffer)) 10)))
@@ -159,7 +159,7 @@
     (let [buffer (b/byte-buffer 10)]
       (dotimes [i 8] (b/push buffer (byte 0)))
       (dotimes [i 8] (b/pop buffer))
-      (?= (b/convert pipe buffer) basinet.Result/UNDERFLOW)
+      (?convert= [pipe buffer] basinet.Result/UNDERFLOW)
       (?= (b/size (b/source buffer)) 7)
       (?= (b/size (b/sink buffer)) 3)
       (dotimes [i 7] (?= (b/pop buffer) (byte (* i i)))))))
@@ -182,18 +182,18 @@
 (deftest converting-simple-byte-buffer-to-chars
   (with-open [bytes (b/byte-buffer (byte-array (map byte (range 97 100))))
               chars (b/char-buffer 3)]
-    (?= (b/convert bytes chars (b/bytes->chars (b/unicode-charset))) basinet.Result/UNDERFLOW)
+    (?convert= [bytes chars (b/bytes->chars (b/unicode-charset))] basinet.Result/UNDERFLOW)
     (dotimes [i 3] (?= (b/pop (b/source chars)) (nth "abc" i)))))
 
 (deftest converting-byte-buffer-to-chars-with-overflow
   (with-open [bytes (b/byte-buffer (byte-array (map byte (range 97 100))))
               chars (b/char-buffer 1)]
-    (?= (b/convert bytes chars (b/bytes->chars (b/unicode-charset))) basinet.Result/OVERFLOW)))
+    (?convert= [bytes chars (b/bytes->chars (b/unicode-charset))] basinet.Result/OVERFLOW)))
 
 (deftest converting-big-byte-sequence-to-char
   (with-open [bytes (b/byte-buffer (byte-array (map byte [-48 -102])))
               chars (b/char-buffer 1)]
-    (?= (b/convert bytes chars (b/bytes->chars (b/unicode-charset))) basinet.Result/UNDERFLOW)
+    (?convert= [bytes chars (b/bytes->chars (b/unicode-charset))] basinet.Result/UNDERFLOW)
     (?= (int (b/pop chars)) 1050)))
 
 (deftest converting-bytes-to-char-circurlar
@@ -203,27 +203,34 @@
     (b/push bytes (byte -48))
     (b/push bytes (byte -102))
     (b/drop 0 (b/source bytes))
-    (?= (b/convert bytes chars (b/bytes->chars (b/unicode-charset))) basinet.Result/UNDERFLOW)
+    (?convert= [bytes chars (b/bytes->chars (b/unicode-charset))] basinet.Result/UNDERFLOW)
     (?true (b/poppable chars))
     (?= (int (b/pop chars)) 1050)))
 
 (deftest converting-chars-to-bytes
   (let [chars (b/char-buffer (char-array "hi!!!"))
         bytes (b/byte-buffer 5)]
-    (?= (b/convert chars bytes (b/chars->bytes (b/unicode-charset))) basinet.Result/UNDERFLOW)
+    (?convert= [chars bytes (b/chars->bytes (b/unicode-charset))] basinet.Result/UNDERFLOW)
     (dotimes [i 5] (?= (b/pop bytes) (nth [104 105 33 33 33] i)))))
 
 (deftest converting-chars-to-bytes-with-overflow
   (let [chars (b/char-buffer (char-array "hi!!!"))
         bytes (b/byte-buffer 2)]
-    (?= (b/convert chars bytes (b/chars->bytes (b/unicode-charset))) basinet.Result/OVERFLOW)
+    (?convert= [chars bytes (b/chars->bytes (b/unicode-charset))] basinet.Result/OVERFLOW)
     (dotimes [i 2] (?= (b/pop bytes) (nth [104 105] i)))))
 
 (deftest converting-big-char-to-bytes
   (let [chars (b/char-buffer (char-array [(char 1050)]))
         bytes (b/byte-buffer 2)]
-    (?= (b/convert chars bytes (b/chars->bytes (b/unicode-charset))) basinet.Result/UNDERFLOW)
+    (?convert= [chars bytes (b/chars->bytes (b/unicode-charset))] basinet.Result/UNDERFLOW)
     (dotimes [i 2] (?= (b/pop bytes) (nth [-48 -102] i)))))
+
+(deftest bytes-to-chars-and-chars-to-bytes-default-wires
+  (let [chars (b/char-buffer (char-array "hello"))
+        bytes (b/byte-buffer 5)]
+    (b/convert chars bytes)
+    (b/convert bytes chars)
+    (dotimes [i 5] (?= (b/pop chars) (nth "hello" i)))))
 
 ;;
 ;; Compaction threshold
@@ -294,26 +301,26 @@
   (with-open [p (b/pipe)
               ob (b/object-buffer 10)]
     (dotimes [i 5] (b/push p (byte (- 5 i))))
-    (?= (b/convert p ob (b/object-buffer-writer)) basinet.Result/UNDERFLOW)
+    (?convert= [p ob (b/object-buffer-writer)] basinet.Result/UNDERFLOW)
     (dotimes [i 5] (?= (b/pop ob) (- 5 i))))
   (with-open [bb (b/byte-buffer (byte-array (map byte (range 10))))
               ob (b/object-buffer 10)]
-    (?= (b/convert bb ob) basinet.Result/OVERFLOW)
+    (?convert= [bb ob] basinet.Result/OVERFLOW)
     (dotimes [i 10] (?= (b/pop ob) i)))
   (with-open [cb (b/char-buffer (char-array "hello"))
               ob (b/object-buffer 10)]
-    (?= (b/convert cb ob) basinet.Result/UNDERFLOW)
+    (?convert= [cb ob] basinet.Result/UNDERFLOW)
     (?= (apply str (repeatedly 5 #(b/pop ob))) "hello")))
 
 (deftest converting-from-object-buffer-to-everything
   (with-open [p (b/pipe)
               ob (b/object-buffer 10)]
     (dotimes [i 5] (b/push ob (byte i)))
-    (?= (b/convert ob p (b/object-buffer-reader)) basinet.Result/UNDERFLOW)
+    (?convert= [ob p (b/object-buffer-reader)] basinet.Result/UNDERFLOW)
     (dotimes [i 5] (?= (b/pop p) i)))
   (with-open [ob (b/object-buffer (map byte (range -5 5)))
               bb (b/byte-buffer 5)]
-    (?= (b/convert ob bb) basinet.Result/OVERFLOW)
+    (?convert= [ob bb] basinet.Result/OVERFLOW)
     (dotimes [i 5] (?= (b/pop bb) (- i 5)))))
 
 ;;buffer has capacity

@@ -97,6 +97,5 @@
     (?= (b/sink w) w)
     (?= (b/source r) r)))
 
-    
-
-
+(deftest pipes-source-is-always-underflown
+  (with-pipe [r w] (?= (b/update r) basinet.Result/UNDERFLOW)))

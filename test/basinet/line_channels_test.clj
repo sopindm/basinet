@@ -1,6 +1,7 @@
 (ns basinet.line-channels-test
   (:require [khazad-dum :refer :all]
-            [basinet :as b])
+            [basinet :as b]
+            [basinet.buffer-test :refer [?convert=]])
   (:import [java.nio.channels ClosedChannelException]))
 
 (deftest line-source-reads-chars-and-makes-strings
@@ -30,11 +31,11 @@
 (deftest line-writing-wire
   (with-open [cb (b/char-buffer "hello\nhi\nagain!!!\n")
               ls (b/line-source)]
-    (?= (b/convert cb ls (b/line-writer)) basinet.Result/OVERFLOW)
+    (?convert= [cb ls (b/line-writer)] basinet.Result/OVERFLOW)
     (?= (b/try-pop ls) "hello")
-    (?= (b/convert cb ls (b/line-writer)) basinet.Result/OVERFLOW)
+    (?convert= [cb ls (b/line-writer)] basinet.Result/OVERFLOW)
     (?= (b/try-pop ls) "hi")
-    (?= (b/convert cb ls) basinet.Result/UNDERFLOW)
+    (?convert= [cb ls] basinet.Result/UNDERFLOW)
     (?= (b/try-pop ls) "again!!!")))
 
 (deftest line-sink-reads-strings-and-writes-chars
@@ -59,9 +60,9 @@
   (with-open [ls (b/line-sink)
               cb (b/char-buffer 10)]
     (b/push ls "hello from nowhere")
-    (?= (b/convert ls cb (b/line-reader)) basinet.Result/OVERFLOW)
+    (?convert= [ls cb (b/line-reader)] basinet.Result/OVERFLOW)
     (?= (apply str (repeatedly 10 #(b/try-pop cb))) "hello from")
-    (?= (b/convert ls cb) basinet.Result/UNDERFLOW)
+    (?convert= [ls cb] basinet.Result/UNDERFLOW)
     (?= (apply str (repeatedly 9 #(b/try-pop cb))) (format " nowhere%n"))))
 
 (deftest configurable-newline-sequence-for-line-sink

@@ -9,8 +9,8 @@ object LineChannel {
   }
 }
 
-class LineSource extends SourceLike[LineSource, String]
-    with SinkLike[LineSource, Character] with ChannelLike {
+class LineSource extends Pipe[LineSource, LineSource, String, Character]
+    with SourceLike[LineSource, String] with SinkLike[LineSource, Character] with ChannelLike {
   override def source = this
   override def sink = this
 
@@ -75,8 +75,8 @@ object LineWriter extends Wire[nio.BufferSource[java.nio.CharBuffer, Character],
     _write(source, sink)
 }
 
-class LineSink(newline: String) extends SinkLike[LineSink, String]
-    with SourceLike[LineSink, Character] with ChannelLike {
+class LineSink(newline: String) extends Pipe[LineSink, LineSink, Character, String]
+    with SinkLike[LineSink, String] with SourceLike[LineSink, Character] with ChannelLike {
   private[this] var _string: String = null
   private[this] var _position = 0
 

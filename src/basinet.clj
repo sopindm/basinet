@@ -10,6 +10,9 @@
 (defn open? [^basinet.Channel channel] (.isOpen channel))
 (defn close [^basinet.Channel channel] (.close channel))
 
+(defn underflow? [result] (.isUnderflow result))
+(defn overflow? [result] (.isOverflow result))
+
 ;;
 ;; Basic stream functions
 ;;
@@ -120,15 +123,37 @@
 
 (defmethod converter [Object basinet.any.BufferSink] [_ _] (object-buffer-writer))
 (defmethod converter [basinet.any.BufferSource Object] [_ _] (object-buffer-reader))
+(prefer-method converter [basinet.any.BufferSource Object] [Object basinet.any.BufferSink])
 
 (defmethod converter [basinet.nio.char.BufferSource basinet.LineSource] [_ _]
   (line-writer))
 (defmethod converter [basinet.LineSink basinet.nio.char.BufferSink] [_ _]
   (line-reader))
 
+(defmethod converter [basinet.nio.byte.BufferSource basinet.nio.char.BufferSink] [_ _]
+  (bytes->chars (unicode-charset)))
+
+(defmethod converter [basinet.nio.char.BufferSource basinet.nio.byte.BufferSink] [_ _]
+  (chars->bytes (unicode-charset)))
+
 (defn convert ([from to wire] (.convert wire from to))
   ([from to] (.convert (converter from to) from to)))
 
-(defn chain
-  ([from to converter] (.apply (scala/object basinet.Chain) from to converter))
-  ([from to] (chain from to (converter from to))))
+(defn chain1
+  ([from to wire] (let [source? (instance? basinet.Pipe to)
+                        sink? (instance? basinet.Pipe from)]
+                    (cond (and sink? source?) (basinet.ChainPipe. from to wire)
+                          sink? (basinet.ChainSink. from to wire)
+                          source? (basinet.ChainSource. from to wire)
+                          :else (basinet.Chain. from to wire))))
+  ([from to] (chain1 from to (converter from to))))
+
+(defn chain [& channels]
+  (if (= (count channels) 1) (first channels)
+      (let [from (first channels)
+            [wire to rest] (if (= (second channels) :by)
+                             [(nth channels 2) (nth channels 3) (clojure.core/drop 4 channels)]
+                             [nil (second channels) (clojure.core/drop 2 channels)])
+            -chain (if wire (chain1 from to wire) (chain1 from to))]
+        (apply chain (cons -chain rest)))))
+

@@ -16,7 +16,7 @@ abstract class Buffer[B <: JBuffer](buffer: B, override val compactionThreshold:
 }
 
 abstract class BufferSource[B <: JBuffer, T]
-  (val buffer: B, pipe: basinet.Pipe[BufferSource[B, T], BufferSink[B, T], T], compactionThreshold: Int)
+  (val buffer: B, pipe: basinet.Pipe[BufferSource[B, T], BufferSink[B, T], T, T], compactionThreshold: Int)
     extends Buffer[B](buffer, compactionThreshold)
     with basinet.BufferSourceLike[BufferSource[B, T], BufferSink[B, T], T] {
   buffer.limit(buffer.limit + compactionThreshold).position(buffer.position + compactionThreshold)
@@ -25,7 +25,7 @@ abstract class BufferSource[B <: JBuffer, T]
 }
 
 abstract class BufferSink[B <: JBuffer, T]
-  (val buffer: B, pipe: basinet.Pipe[BufferSource[B, T], BufferSink[B, T], T], compactionThreshold: Int)
+  (val buffer: B, pipe: basinet.Pipe[BufferSource[B, T], BufferSink[B, T], T, T], compactionThreshold: Int)
     extends Buffer[B](buffer, compactionThreshold)
     with basinet.BufferSinkLike[BufferSource[B, T], BufferSink[B, T], T] {
   buffer.limit(buffer.limit + compactionThreshold).position(buffer.limit).limit(buffer.capacity)
@@ -36,7 +36,7 @@ abstract class BufferSink[B <: JBuffer, T]
 }
 
 abstract class BufferPipe[B <: JBuffer, T](buffer: B)
-    extends basinet.Pipe[BufferSource[B, T], BufferSink[B, T], T]
+    extends basinet.PipeLike[BufferSource[B, T], BufferSink[B, T], T, T]
 
 package byte {
   class BufferSource(buffer: JByteBuffer,
@@ -130,11 +130,13 @@ class CharsetDecoder(charset: Charset)
     to.drop(chars.position - charsAt)
 
     if(result == CoderResult.UNDERFLOW) {
-      if(from.size == (bytes.limit - bytes.position)) basinet.Result.UNDERFLOW
+      if(from.size == (bytes.limit - bytes.position))
+        basinet.Result.UNDERFLOW
       else decode(decoder, from, to)
     }
     else if(result == CoderResult.OVERFLOW) {
-      if(to.size == (chars.limit - chars.position)) basinet.Result.OVERFLOW
+      if(to.size == (chars.limit - chars.position))
+        basinet.Result.OVERFLOW
       else decode(decoder, from, to)
     }
     else throw new CharacterCodingException
@@ -159,11 +161,13 @@ class CharsetEncoder(charset: Charset)
     to.drop(bytes.position - bytesAt)
 
     if(result == CoderResult.UNDERFLOW) {
-      if(from.size == (chars.limit - chars.position)) basinet.Result.UNDERFLOW
+      if(from.size == (chars.limit - chars.position))
+        basinet.Result.UNDERFLOW
       else encode(encoder, from, to)
     }
     else if(result == CoderResult.OVERFLOW) {
-      if(to.size == (bytes.limit - bytes.position)) basinet.Result.OVERFLOW
+      if(to.size == (bytes.limit - bytes.position))
+        basinet.Result.OVERFLOW
       else encode(encoder, from, to)
     }
     else throw new CharacterCodingException

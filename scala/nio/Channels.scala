@@ -30,8 +30,9 @@ class ByteSource(val channel: ReadableByteChannel)
   def eof = close
 
   override def tryPop:Option[Byte] = {
+    if(!isOpen) throw new ClosedChannelException
     val buffer = byte.Buffer(1)
-    if(ByteChannelReader.convert(this, buffer.sink) == Result.OVERFLOW)
+    if(ByteChannelReader.convert(this, buffer.sink).isOverflow)
       Some(buffer.pop)
     else None
   }
@@ -41,8 +42,9 @@ class ByteSink(val channel: WritableByteChannel)
     extends Channel(channel) with basinet.Sink[ByteSink, Byte] {
   override def sink = this
   override def tryPush(value: Byte) = {
+    if(!isOpen) throw new ClosedChannelException
     val buffer = byte.Buffer(1); buffer.push(value)
-    ByteChannelWriter.convert(buffer, this) == Result.UNDERFLOW
+    ByteChannelWriter.convert(buffer, this).isUnderflow
   }
 }
 
@@ -76,7 +78,7 @@ trait TcpAddressable {
 }
 
 class TcpSocket(channel: java.nio.channels.SocketChannel)
-    extends basinet.Pipe[ByteSource, ByteSink, Byte]
+    extends basinet.PipeLike[ByteSource, ByteSink, Byte, Byte]
     with TcpAddressable {
   self: TcpSocket =>
 
@@ -178,6 +180,7 @@ object ByteChannelReader
   override def _convert(source: ByteSource, sink: BufferSink[java.nio.ByteBuffer, Byte]) = {
     sink.requireOpen
     val got = read(source, sink, 0)
+
     if(sink.size > 0) basinet.Result.UNDERFLOW
     else basinet.Result.OVERFLOW
   }
@@ -196,6 +199,7 @@ object ByteChannelWriter
   override def _convert(source: BufferSource[java.nio.ByteBuffer, Byte], sink: ByteSink) = {
     source.requireOpen
     val got = write(sink, source, 0)
+
     if(source.size > 0) basinet.Result.OVERFLOW
     else basinet.Result.UNDERFLOW
   }

@@ -1,59 +1,48 @@
 package basinet
 
-object Chain {
-  def apply[SR <: Source[SR, T],
-            BSR <: BufferSource[BSR, T],
-            BSN <: BufferSink[BSN, T], T]
-    (channel: Source[SR, T],
-     buffer: Pipe[BSR, BSN, T],
-     wire: Wire[SR, BSN])
-  = new BufferSource[BSR, T] {
-    override def source = buffer.source
+class Chain[SR <: Source[SR, T], SN <: Sink[SN, U], T, U]
+  (source: Source[SR, T], sink: Sink[SN, U], wire: Wire[SR, SN]) extends Channel {
+  override def isOpen = source.isOpen || sink.isOpen
+  override def close { source.close; sink.close }
 
-    override def isOpen = channel.isOpen
-    override def close = channel.close
+  override def update: basinet.Result = {
+    val sourceState = source.update
+    val state = wire.convert(source, sink)
+    val sinkState = sink.update
+    if(!sink.isOpen) source.close
 
-    override def poppable = channel.isOpen
-
-    override def update = wire.convert(channel.source, buffer.sink)
-
-    override def tryPop = if(buffer.source.poppable)
-      buffer.source.tryPop
-    else if(channel.isOpen) { update; buffer.source.tryPop }
-    else None
-
-    override def drop(n: Int) = buffer.source.drop(n)
-    override def expand(n: Int) = buffer.source.expand(n)
-    override def size = buffer.source.size
-
-    override def get(index: Int) = buffer.source.get(index)
+    sourceState.merge(state).merge(sinkState)
   }
+}
 
-  def apply[BSR <: BufferSource[BSR, T],
-            BSN <: BufferSink[BSN, T],
-            SN <: Sink[SN, T], T] 
-    (buffer: Pipe[BSR, BSN, T],
-     channel: Sink[SN, T],
-     wire: Wire[BSR, SN])
-  = new BufferSink[BSN, T] {
-    override def isOpen = channel.isOpen
-    override def close = channel.close
+class ChainSource[SR <: Source[SR, T], SN <: Sink[SN, U], SRI <: Source[SRI, V], T, U, V]
+  (_source: Source[SR, T], _sink: Pipe[SRI, SN, V, U], wire: Wire[SR, SN])
+    extends Chain[SR, SN, T, U](_source, _sink, wire) with Source[SRI, V] {
+  override def source = _sink.source
 
-    override def sink = buffer.sink
+  override def poppable = _sink.poppable | _source.poppable
+  override def tryPop = _sink.tryPop
+}
 
-    override def update = wire.convert(buffer.source, channel.sink)
+class ChainSink[SR <: Source[SR, T], SN <: Sink[SN, U], SNI <: Sink[SNI, V], T, U, V]
+  (_source: Pipe[SR, SNI, T, V], _sink: Sink[SN, U], wire: Wire[SR, SN])
+    extends Chain[SR, SN, T, U](_source, _sink, wire) with Sink[SNI, V] {
+  override def sink = _source.sink
 
-    override def tryPush(value: T) = {
-      val result = buffer.sink.tryPush(value)
-      update
-      result
-    }
+  override def pushable = _source.pushable || _sink.pushable
+  override def tryPush(value: V) = _source.tryPush(value)
+}
 
-    override def drop(n: Int) = buffer.sink.drop(n)
-    override def expand(n: Int) =  buffer.sink.expand(n)
-    override def size = buffer.sink.size
+class ChainPipe[SR <: Source[SR, T], SN <: Sink[SN, U], SRI <: Source[SRI, V], SNI <: Sink[SNI, W],
+                T, U, V, W]
+  (_source: Pipe[SR, SNI, T, W], _sink: Pipe[SRI, SN, V, U], wire: Wire[SR, SN])
+    extends Chain[SR, SN, T, U](_source, _sink, wire) with Pipe[SRI, SNI, V, W] {
+  override def sink = _source.sink
+  override def source = _sink.source
 
-    override def set(index: Int, value: T) =
-      buffer.sink.set(index, value)
-  }
+  override def poppable = _sink.poppable || _source.poppable
+  override def pushable = _source.pushable || _sink.pushable
+
+  override def tryPop = _sink.tryPop
+  override def tryPush(value: W) = _source.tryPush(value)
 }

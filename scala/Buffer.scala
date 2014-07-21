@@ -139,7 +139,7 @@ package any {
   }
 
   class BufferSource[T](buffer: Array[T], size: Int, compactionThreshold: Int,
-                        pipe: basinet.Pipe[BufferSource[T], BufferSink[T], T])
+    pipe: basinet.Pipe[BufferSource[T], BufferSink[T], T, T])
       extends Buffer[T](buffer, 0, size, compactionThreshold)
       with basinet.BufferSourceLike[BufferSource[T], BufferSink[T], T] {
     override def source = this
@@ -148,7 +148,7 @@ package any {
   }
 
   class BufferSink[T](buffer: Array[T], size: Int, compactionThreshold: Int,
-                      pipe: basinet.Pipe[BufferSource[T], BufferSink[T], T])
+                      pipe: basinet.Pipe[BufferSource[T], BufferSink[T], T, T])
       extends Buffer[T](buffer, size, buffer.size - compactionThreshold, compactionThreshold)
       with basinet.BufferSinkLike[BufferSource[T], BufferSink[T], T] {
     override def sink = this
@@ -157,7 +157,7 @@ package any {
   }
 
   class BufferPipe[T](buffer: Array[T], size: Int, compactionThreshold: Int)
-    extends basinet.Pipe[BufferSource[T], BufferSink[T], T] {
+      extends basinet.PipeLike[BufferSource[T], BufferSink[T], T, T] {
     override val source = new BufferSource[T](buffer, size, compactionThreshold, this)
     override val sink = new BufferSink[T](buffer, size, compactionThreshold, this)
   }
