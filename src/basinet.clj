@@ -85,17 +85,6 @@
   (.set buffer ^int index value))
 
 ;;
-;; Channels
-;;
-
-(defn line-source [] (basinet.LineSource.))
-(defn line-writer [] (scala/object basinet.LineWriter))
-
-(defn line-sink ([] (line-sink "\n"))
-  ([newline] (basinet.LineSink. newline)))
-(defn line-reader [] (scala/object basinet.LineReader))
-
-;;
 ;; Wires
 ;;
 
@@ -111,6 +100,10 @@
 (defn bytes->chars [charset] (basinet.nio.CharsetDecoder. charset))
 (defn chars->bytes [charset] (basinet.nio.CharsetEncoder. charset))
 
+(defn line-writer [] (basinet.LineWriter.))
+(defn line-reader ([newline] (basinet.LineReader. newline))
+  ([] (line-reader "\n")))
+
 (defmulti converter (fn [from to] [(type (source from))
                                    (type (sink to))]))
 
@@ -125,8 +118,6 @@
 (defmethod converter [basinet.any.BufferSource Object] [_ _] (object-buffer-reader))
 (prefer-method converter [basinet.any.BufferSource Object] [Object basinet.any.BufferSink])
 
-(defmethod converter [basinet.nio.char.BufferSource basinet.LineSource] [_ _]
-  (line-writer))
 (defmethod converter [basinet.LineSink basinet.nio.char.BufferSink] [_ _]
   (line-reader))
 
