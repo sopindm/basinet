@@ -75,28 +75,33 @@ trait SinkLike[SN <: SinkLike[SN, T], T] extends Sink[SN, T] {
 trait Pipe[SR <: Source[SR, T], SN <: Sink[SN, U], T, U] extends Source[SR, T] with Sink[SN, U]
 
 trait PipeLike[SR <: Source[SR, T], SN <: Sink[SN, U], T, U] extends Pipe[SR, SN, T, U] {
-  override def isOpen = source.isOpen || sink.isOpen
-  override def close { source.close; sink.close }
+  def pipeSource: Source[SR, T] = source
+  def pipeSink: Sink[SN, U] = sink
 
-  override def push(value: U) = sink.push(value)
-  override def pushIn(value: U, milliseconds: Int) = sink.pushIn(value, milliseconds)
-  override def tryPush(value: U) = sink.tryPush(value)
+  override def isOpen = pipeSource.isOpen || pipeSink.isOpen
+  override def close { pipeSource.close; pipeSink.close }
 
-  override def pop = source.pop
-  override def popIn(milliseconds: Int) = source.popIn(milliseconds)
-  override def tryPop = source.tryPop
+  override def push(value: U) = pipeSink.push(value)
+  override def pushIn(value: U, milliseconds: Int) = pipeSink.pushIn(value, milliseconds)
+  override def tryPush(value: U) = pipeSink.tryPush(value)
 
-  override def poppable = source.poppable
-  override def pushable = sink.pushable
+  override def pop = pipeSource.pop
+  override def popIn(milliseconds: Int) = pipeSource.popIn(milliseconds)
+  override def tryPop = pipeSource.tryPop
 
-  override def update = source.update.merge(sink.update)
+  override def poppable = pipeSource.poppable
+  override def pushable = pipeSink.pushable
 }
 
 class PipeOf[SR <: Source[SR, T], SN <: Sink[SN, U], T, U]
-  (_source: Source[SR, T], _sink: Sink[SN, U])
-    extends PipeLike[SR, SN, T, U] {
+  (_source: Source[SR, T], _sink: Sink[SN, U]) extends PipeLike[SR, SN, T, U] {
   override def source = _source.source
+  override def pipeSource = _source
+
   override def sink = _sink.sink
+  override def pipeSink = _sink
+
+  override def update = _source.update.merge(_sink.update)
 }
 
 object PipeOf {

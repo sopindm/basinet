@@ -59,3 +59,56 @@
       (?convert= [ob cb lr] Result/OVERFLOW)
       (?chars= cb "hello!!!"))))
 
+(deftest simple-line-source-test
+  (with-open [pipe (b/pipe)
+              source (b/line-source (b/source pipe))]
+    (doseq [c "hello\n"] (b/push pipe (byte c)))
+    (?= (b/pop source) "hello")))
+
+(deftest simple-line-sink-test
+  (with-open [pipe (b/pipe)
+              sink (b/line-sink (b/sink pipe))]
+    (b/push sink "hello")
+    (b/update sink)
+    (doseq [c "hello\n"] (?= (b/try-pop pipe) (int c)))))
+
+(deftest line-sink-with-lines-option
+  (with-open [pipe (b/pipe)
+              source (b/line-source pipe)
+              sink (b/line-sink pipe  :lines 5)]
+    (dotimes [i 5] (?= (b/try-push sink "hello") true))
+    (b/update sink)
+    (dotimes [i 5] (?= (b/pop source) "hello"))))
+    
+(deftest line-source-with-lines-option
+  (with-open [pipe (b/pipe)
+              source (b/line-source pipe :lines 5)
+              sink (b/line-sink pipe :lines 5)]
+    (dotimes [i 5] (b/push sink "hello"))
+    (b/update sink)
+    (b/update source)
+    (dotimes [i 5] (?= (b/try-pop source) "hello"))))
+
+(deftest line-source-with-encoding-option
+  (with-open [pipe (b/pipe)
+              source (b/line-source pipe :charset "UTF-16LE")]
+    (doseq [b (map byte [58 4 10 0])] (b/push pipe b))
+    (?= (b/pop source) (str (char 1082)))))
+
+(deftest line-sink-with-encoding-option
+  (with-open [pipe (b/pipe)
+              sink (b/line-sink pipe :charset "UTF-16LE")]
+    (b/push sink (str (char 1082)))
+    (b/update sink)
+    (doseq [b (map byte [58 4 10 0])] (?= (b/pop pipe) b))))
+
+(deftest line-socket-test
+  (with-open [pipe (b/pipe)
+              socket (b/line-socket pipe :lines 2)]
+    (b/try-push socket "hi")
+    (b/try-push socket "Hello!!!")
+    (b/update socket)
+    (b/update socket)
+    (?= (b/try-pop socket) "hi")
+    (?= (b/try-pop socket) "Hello!!!")))
+

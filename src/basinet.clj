@@ -39,6 +39,7 @@
 (defn ^basinet.Source source [^basinet.Pipe pipe] (.source pipe))
 (defn ^basinet.Sink sink [^basinet.Pipe pipe] (.sink pipe))
 
+(defn pipe-of [source sink] (.apply (scala/object basinet.PipeOf) source sink))
 (defn pipe [] (scala/apply (scala/object basinet.nio.Pipe)))
 
 ;;
@@ -96,7 +97,8 @@
 (def -object-buffer-reader (basinet.any.BufferReader.))
 (defn object-buffer-reader [] -object-buffer-reader)
 
-(defn unicode-charset [] (java.nio.charset.Charset/forName "UTF-8"))
+(defn charset [name] (java.nio.charset.Charset/forName name))
+(defn unicode-charset [] (charset "UTF-8"))
 (defn bytes->chars [charset] (basinet.nio.CharsetDecoder. charset))
 (defn chars->bytes [charset] (basinet.nio.CharsetEncoder. charset))
 
@@ -130,6 +132,10 @@
 (defn convert ([from to wire] (.convert wire from to))
   ([from to] (.convert (converter from to) from to)))
 
+;;
+;; Chains
+;;
+
 (defn chain1
   ([from to wire] (let [source? (instance? basinet.Pipe to)
                         sink? (instance? basinet.Pipe from)]
@@ -148,3 +154,19 @@
             -chain (if wire (chain1 from to wire) (chain1 from to))]
         (apply chain (cons -chain rest)))))
 
+(defn line-source [byte-source & {:keys [lines charset] :or {lines 1 charset "UTF-8"}}]
+  (let [charset (basinet/charset charset)
+        chars-in-byte (.maxCharsPerByte (.newDecoder charset))
+        bytes-in-char (.maxBytesPerChar (.newEncoder charset))]
+    (chain (source byte-source) (byte-buffer 1024 bytes-in-char) :by (bytes->chars charset)
+           (char-buffer 1024 chars-in-byte) :by (line-writer) (object-buffer lines))))
+
+(defn line-sink [byte-sink & {:keys [lines charset] :or {lines 1 charset "UTF-8"}}]
+  (let [charset (basinet/charset charset)
+        chars-in-byte (.maxCharsPerByte (.newDecoder charset))
+        bytes-in-char (.maxBytesPerChar (.newEncoder charset))]
+    (chain (object-buffer lines) :by (line-reader) (char-buffer 1024 chars-in-byte)
+           :by (chars->bytes charset) (byte-buffer 1024 bytes-in-char) byte-sink)))
+
+(defn line-socket [byte-socket & args]
+  (pipe-of (apply line-source (source byte-socket) args) (apply line-sink (sink byte-socket) args)))
