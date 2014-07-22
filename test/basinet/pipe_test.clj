@@ -98,4 +98,4 @@
     (?= (b/source r) r)))
 
 (deftest pipes-source-is-always-underflown
-  (with-pipe [r w] (?= (b/update r) basinet.Result/UNDERFLOW)))
+  (with-pipe [r w] (?= (b/update r) basinet.Result/NOTHING)))

@@ -10,10 +10,7 @@
     (dotimes [i 10] (?= (b/pop buffer) (byte (* i i))))))
 
 (deftest buffer-update
-  (let [b (b/byte-buffer 2)]
-    (?= (b/update b) basinet.Result/UNDERFLOW)
-    (?= (do (b/push b (byte 1)) (b/update b)) basinet.Result/NOTHING)
-    (?= (do (b/push b (byte 1)) (b/update b)) basinet.Result/OVERFLOW)))
+  (?= (b/update (b/byte-buffer 1)) basinet.Result/NOTHING))
 
 (deftest pushing-to-full-buffer
   (let [buffer (b/byte-buffer 1)]

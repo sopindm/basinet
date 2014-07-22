@@ -137,24 +137,20 @@
     (?= (b/pop-in chain 1000) nil)))
 
 (deftest long-chain
-  (with-open [chain (b/chain (b/object-buffer 5)
-                             (b/line-sink)
-                             (b/char-buffer 10)
+  (with-open [chain (b/chain (b/char-buffer 10)
                              (b/byte-buffer 1)
                              (b/pipe)
                              (b/byte-buffer 1)
-                             (b/char-buffer 10)
-                             (b/line-source)
-                             (b/object-buffer 5))]
-    (let [text [(format "hello one") "hello two" "hi" "hi" "hi"]]
-      (dotimes [i 5] (b/push chain (nth text i)))
-      (dotimes [i 5] (?= (b/pop chain) (nth text i))))))
+                             (b/char-buffer 10))]
+    (let [chars "hello, cruel hypocrite world!!!"]
+      (doseq [c chars] (b/push chain c))
+      (doseq [c chars] (?= (b/pop chain) c)))))
 
 (deftest long-chain-with-wire
   (with-open [chain (b/chain (b/object-buffer 10) :by (b/object-buffer-reader)
-                             (b/object-buffer 5) :by (b/object-buffer-reader)
-                             (b/line-sink) (b/char-buffer 10) :by (b/line-writer)
-                             (b/line-source))]
+                             (b/object-buffer 5) :by (b/line-reader)
+                             (b/char-buffer 10) :by (b/line-writer)
+                             (b/object-buffer 1))]
     (let [text ["hi" "hello" "hullo"]]
       (dotimes [i (count text)] (b/push chain (nth text i)))
       (dotimes [i (count text)] (?= (b/pop chain) (nth text i))))))    
