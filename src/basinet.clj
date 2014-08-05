@@ -10,8 +10,8 @@
 (defn open? [^basinet.Channel channel] (.isOpen channel))
 (defn close [^basinet.Channel channel] (.close channel))
 
-(defn underflow? [result] (.isUnderflow result))
-(defn overflow? [result] (.isOverflow result))
+(defn underflow? [^basinet.Result result] (.isUnderflow result))
+(defn overflow? [^basinet.Result result] (.isOverflow result))
 
 ;;
 ;; Basic stream functions
@@ -19,13 +19,13 @@
 
 (defn update [^basinet.Channel channel] (.update channel))
 
-(defn pushable [sink] (.pushable sink))
+(defn pushable [^basinet.Sink sink] (.pushable sink))
 
 (defn push [^basinet.Sink sink item] (.push sink item))
 (defn push-in [^basinet.Sink sink item milliseconds] (.pushIn sink item milliseconds))
 (defn try-push [^basinet.Sink sink item] (.tryPush sink item))
 
-(defn poppable [source] (.poppable source))
+(defn poppable [^basinet.Source source] (.poppable source))
 
 (defn pop [^basinet.Source source] (.pop source))
 (defn pop-in [^basinet.Source source milliseconds]
@@ -97,7 +97,7 @@
 (def -object-buffer-reader (basinet.any.BufferReader.))
 (defn object-buffer-reader [] -object-buffer-reader)
 
-(defn charset [name] (java.nio.charset.Charset/forName name))
+(defn ^java.nio.charset.Charset charset [name] (java.nio.charset.Charset/forName name))
 (defn unicode-charset [] (charset "UTF-8"))
 (defn bytes->chars [charset] (basinet.nio.CharsetDecoder. charset))
 (defn chars->bytes [charset] (basinet.nio.CharsetEncoder. charset))
@@ -106,8 +106,8 @@
 (defn line-reader ([newline] (basinet.LineReader. newline))
   ([] (line-reader "\n")))
 
-(defmulti converter (fn [from to] [(type (source from))
-                                   (type (sink to))]))
+(defmulti ^basinet.Wire converter (fn [from to] [(type (source from))
+                                                 (type (sink to))]))
 
 (defmethod converter [basinet.nio.ByteSource
                       basinet.nio.byte.BufferSink]
@@ -129,8 +129,8 @@
 (defmethod converter [basinet.nio.char.BufferSource basinet.nio.byte.BufferSink] [_ _]
   (chars->bytes (unicode-charset)))
 
-(defn convert ([from to wire] (.convert wire from to))
-  ([from to] (.convert (converter from to) from to)))
+(defn convert ([^basinet.Source from ^basinet.Sink to ^basinet.Wire wire] (.convert wire from to))
+  ([^basinet.Source from ^basinet.Sink to] (.convert (converter from to) from to)))
 
 ;;
 ;; Chains
@@ -170,3 +170,12 @@
 
 (defn line-socket [byte-socket & args]
   (pipe-of (apply line-source (source byte-socket) args) (apply line-sink (sink byte-socket) args)))
+
+;;
+;; Events
+;;
+
+(defn on-close [channel] (.onClose channel))
+
+(defn on-poppable [channel] (.onPoppable channel))
+(defn on-pushable [channel] (.onPushable channel))

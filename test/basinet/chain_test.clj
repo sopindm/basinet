@@ -58,6 +58,15 @@
     (?= (b/update chain) basinet.Result/OVERFLOW)
     (?false (b/open? source))))
 
+(deftest update-with-closed-source-closes-sink
+  (with-open [source (b/object-buffer (range 5))
+              sink (b/chain (b/object-buffer 10) (b/object-buffer (range 10)))
+              chain (b/chain source sink)]
+    (b/close source)
+    (b/update chain)
+    (?true (b/open? sink))
+    (?false (b/open? (b/sink sink)))))
+
 ;;
 ;; Chain source/sinks/pipes
 ;;
@@ -153,7 +162,15 @@
                              (b/object-buffer 1))]
     (let [text ["hi" "hello" "hullo"]]
       (dotimes [i (count text)] (b/push chain (nth text i)))
-      (dotimes [i (count text)] (?= (b/pop chain) (nth text i))))))    
-    
+      (dotimes [i (count text)] (?= (b/pop chain) (nth text i))))))
 
-
+(deftest closing-source-chain
+  (with-open [pipe (b/pipe)
+              byte-buffer (b/byte-buffer 1000)
+              char-buffer (b/char-buffer 1000)
+              chain (b/chain (b/source pipe) byte-buffer char-buffer
+                             :by (b/line-writer) (b/object-buffer 1))]
+    (b/close pipe)
+    (?true (b/open? chain))
+    (b/update chain)
+    (?false (b/open? chain))))

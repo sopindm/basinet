@@ -1,6 +1,7 @@
 (ns basinet.pipe-test
   (:require [khazad-dum :refer :all]
-            [basinet :as b])
+            [basinet :as b]
+            [evil-ant :as e])
   (:import [basinet Source Sink]))
 
 (defmacro with-pipe [[source sink] & body]
@@ -97,5 +98,34 @@
     (?= (b/sink w) w)
     (?= (b/source r) r)))
 
-(deftest pipes-source-is-always-underflown
-  (with-pipe [r w] (?= (b/update r) basinet.Result/NOTHING)))
+;;
+;; Events
+;;
+
+(deftest pipes-source-emits-onclose-on-close
+  (with-pipe [r w]
+    (let [actions (atom [])
+          h (e/handler ([e s] (swap! actions #(conj % [e s]))) (b/on-close r))]
+      (b/close r)
+      (?= @actions [[(b/on-close r) r]])
+      (?false (.isOpen (b/on-close r))))))
+
+(deftest pipes-source-isnt-poppalbe-by-default
+  (with-pipe [r w]
+    (?false (e/emit-now! (b/on-poppable r) r))))
+
+(deftest pipes-source-poppable-with-has-something
+  (with-pipe [r w]
+    (b/push w (byte 10))
+    (?true (e/emit-now! (b/on-poppable r) r))))
+
+(deftest pipes-sink-is-pushable-by-default
+  (with-pipe [r w]
+    (?true (e/emit-now! (b/on-pushable w) w))))
+
+(deftest pipes-sink-isnt-pushable-when-overflown
+  (with-pipe [r w]
+    (while (b/try-push w (byte 0)))
+    (?false (e/emit-now! (b/on-pushable w) w))))
+    
+

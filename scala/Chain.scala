@@ -3,11 +3,13 @@ package basinet
 class Chain[SR <: Source[SR, T], SN <: Sink[SN, U], T, U]
   (source: Source[SR, T], sink: Sink[SN, U], wire: Wire[SR, SN]) extends Channel {
   override def isOpen = source.isOpen || sink.isOpen
-  override def close { source.close; sink.close }
+  override def _close { source.close; sink.close }
 
   override def update: basinet.Result = {
     val sourceState = source.update
     val state = wire.convert(source, sink)
+    if(!source.isOpen) sink.sink.close
+
     val sinkState = sink.update
     if(!sink.isOpen) source.close
 

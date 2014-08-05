@@ -27,7 +27,6 @@ trait BufferLike extends Buffer {
   def compact(begin: Int, end: Int) = reset(begin, end)
 
   override def drop(n: Int) {
-    requireOpen
     if(begin + n >= capacity) {
       val newSize = size - n
       val newBegin = begin + n - capacity + compactionThreshold
@@ -45,7 +44,6 @@ trait BufferLike extends Buffer {
   }
 
   override def expand(n: Int) {
-    requireOpen
     val inc = min(capacity - end, n)
     reset(begin, end + inc)
     tail += n - inc
@@ -78,7 +76,7 @@ trait BufferSourceLike[SR <: BufferSourceLike[SR, SN, T], SN <: BufferSinkLike[S
   def absoluteGet(index: Int): T
   override def get(index: Int) = { requireOpen; absoluteGet(indexToPosition(index)) }
 
-  override def close = { super.close; sink.close }
+  override def _close = { super._close; sink.close }
 
   def _drop(n: Int) = super.drop(n)
   def _expand(n: Int) = super.expand(n)
@@ -89,6 +87,11 @@ trait BufferSourceLike[SR <: BufferSourceLike[SR, SN, T], SN <: BufferSinkLike[S
   override def compact(begin: Int, end: Int) {
     copy(begin, capacity - compactionThreshold + begin, min(end - begin, compactionThreshold - begin))
     super.compact(begin, end)
+  }
+
+  override def update = { 
+    if(!poppable && !sink.isOpen) close
+    super.update
   }
 }
 

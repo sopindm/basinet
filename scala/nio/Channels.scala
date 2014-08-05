@@ -7,11 +7,25 @@ import scala.Option
 import scala.annotation.tailrec
 
 class Channel(channel: JChannel) extends basinet.Channel {
-  if(channel.isInstanceOf[SelectableChannel])
-    channel.asInstanceOf[SelectableChannel].configureBlocking(false)
+  private def _asSelectable: Option[SelectableChannel] = if(channel.isInstanceOf[SelectableChannel])
+    Some(channel.asInstanceOf[SelectableChannel]) else None
 
-  override def close { if(isOpen) channel.close }
+  _asSelectable match { case Some(channel) => channel.configureBlocking(false); case _ => () }
+  
+  override def _close { if(isOpen) channel.close }
   override def isOpen = channel.isOpen
+
+  override val onClose = new evil_ant.Event(true)
+
+  def _onPoppable = _asSelectable match {
+    case Some(channel) => new evil_ant.SelectorSignal(channel, SelectionKey.OP_READ, false)
+    case None => null
+  }
+
+  def _onPushable = _asSelectable match {
+    case Some(channel) => new evil_ant.SelectorSignal(channel, SelectionKey.OP_WRITE, false)
+    case None => null
+  }
 }
 
 abstract class Source[T](channel: JChannel) extends Channel(channel)
@@ -36,6 +50,8 @@ class ByteSource(val channel: ReadableByteChannel)
       Some(buffer.pop)
     else None
   }
+
+  override def onPoppable = _onPoppable
 }
 
 class ByteSink(val channel: WritableByteChannel)
@@ -46,6 +62,8 @@ class ByteSink(val channel: WritableByteChannel)
     val buffer = byte.Buffer(1); buffer.push(value)
     ByteChannelWriter.convert(buffer, this).isUnderflow
   }
+
+  override def onPushable = _onPushable
 }
 
 object Pipe {
@@ -90,7 +108,7 @@ class TcpSocket(channel: java.nio.channels.SocketChannel)
   @volatile
   private[this] var _writable = true
 
-  override def close { channel.close }
+  override def _close { channel.close }
   override def isOpen = channel.isOpen
 
   override def localAddress = { val address = channel.getLocalAddress
@@ -106,7 +124,7 @@ class TcpSocket(channel: java.nio.channels.SocketChannel)
 
     override def eof = self.close
 
-    override def close {
+    override def _close {
       _readable = false
       if(!_writable) channel.close
     }
@@ -118,7 +136,7 @@ class TcpSocket(channel: java.nio.channels.SocketChannel)
   override val sink = new ByteSink(channel) with TcpAddressable {
     override def isOpen = self.isOpen && _writable
 
-    override def close {
+    override def _close {
       _writable = false
       if(!_readable) channel.close
     }

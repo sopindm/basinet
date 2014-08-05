@@ -75,9 +75,7 @@
     (.close s)
     (?false (b/open? s))
     (?false (b/poppable s))
-    (?throws (b/get s 0) ClosedChannelException)
-    (?throws (b/drop 0 s) ClosedChannelException)
-    (?throws (b/expand 0 s) ClosedChannelException)))
+    (?throws (b/get s 0) ClosedChannelException)))
 
 (deftest closing-buffer-sink
   (let [b (b/byte-buffer 10)
@@ -99,6 +97,20 @@
     (.close (b/source b))
     (?false (b/open? (b/sink b)))
     (?false (b/open? b))))
+
+(deftest closing-buffer-sink-with-empty-source-closes-source
+  (with-open [b (b/byte-buffer 1)]
+    (b/close (b/sink b))
+    (b/update b)
+    (?false (b/open? (b/source b))))
+  (with-open [b (b/byte-buffer 1)]
+    (b/push b (byte 100))
+    (b/close (b/sink b))
+    (b/update b)
+    (?true (b/open? (b/source b)))
+    (b/pop b)
+    (b/update b)
+    (?false (b/open? (b/source b)))))
 
 ;;
 ;; byte wires
@@ -322,6 +334,3 @@
 
 ;;buffer has capacity
 ;;direct buffers
-
-
-

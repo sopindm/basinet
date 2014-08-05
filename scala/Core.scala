@@ -4,17 +4,23 @@ import java.nio.channels.SelectableChannel
 
 trait Channel extends java.io.Closeable {
   def isOpen: Boolean
-  def close: Unit
+  final def close: Unit = {
+    if(isOpen && onClose != null) onClose.emit(this)
+    _close
+  }
+  protected def _close: Unit
 
   def requireOpen = if(!isOpen) throw new java.nio.channels.ClosedChannelException
 
   def update: Result = Result.NOTHING
+
+  def onClose: evil_ant.IEvent = null
 }
 
 trait ChannelLike extends Channel {
   private[this] var _isOpen = true
   override def isOpen = _isOpen
-  override def close { _isOpen = false }
+  override def _close { _isOpen = false }
 }
 
 trait Source[SR <: Source[SR, T], T] extends Channel {
@@ -42,6 +48,8 @@ trait Source[SR <: Source[SR, T], T] extends Channel {
 
     result
   }
+
+  def onPoppable: evil_ant.ISignal = null
 }
 
 trait Sink[SN <: Sink[SN, T], T] extends Channel {
@@ -60,6 +68,8 @@ trait Sink[SN <: Sink[SN, T], T] extends Channel {
     }
     result
   }
+
+  def onPushable: evil_ant.ISignal = null
 }
 
 trait SourceLike[SR <: SourceLike[SR, T], T] extends Source[SR, T] {
@@ -79,7 +89,7 @@ trait PipeLike[SR <: Source[SR, T], SN <: Sink[SN, U], T, U] extends Pipe[SR, SN
   def pipeSink: Sink[SN, U] = sink
 
   override def isOpen = pipeSource.isOpen || pipeSink.isOpen
-  override def close { pipeSource.close; pipeSink.close }
+  override def _close { pipeSource.close; pipeSink.close }
 
   override def push(value: U) = pipeSink.push(value)
   override def pushIn(value: U, milliseconds: Int) = pipeSink.pushIn(value, milliseconds)
@@ -91,6 +101,8 @@ trait PipeLike[SR <: Source[SR, T], SN <: Sink[SN, U], T, U] extends Pipe[SR, SN
 
   override def poppable = pipeSource.poppable
   override def pushable = pipeSink.pushable
+
+  override def update = pipeSource.update.merge(pipeSink.update)
 }
 
 class PipeOf[SR <: Source[SR, T], SN <: Sink[SN, U], T, U]
@@ -100,8 +112,6 @@ class PipeOf[SR <: Source[SR, T], SN <: Sink[SN, U], T, U]
 
   override def sink = _sink.sink
   override def pipeSink = _sink
-
-  override def update = _source.update.merge(_sink.update)
 }
 
 object PipeOf {
