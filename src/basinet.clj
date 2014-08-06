@@ -120,9 +120,6 @@
 (defmethod converter [basinet.any.BufferSource Object] [_ _] (object-buffer-reader))
 (prefer-method converter [basinet.any.BufferSource Object] [Object basinet.any.BufferSink])
 
-(defmethod converter [basinet.LineSink basinet.nio.char.BufferSink] [_ _]
-  (line-reader))
-
 (defmethod converter [basinet.nio.byte.BufferSource basinet.nio.char.BufferSink] [_ _]
   (bytes->chars (unicode-charset)))
 

@@ -1,7 +1,8 @@
 (ns basinet.tcp-test
   (:require [khazad-dum :refer :all]
             [basinet :as b]
-            [basinet.tcp :as tcp])
+            [basinet.tcp :as tcp]
+            [evil-ant :as e])
   (:import [basinet Pipe]))
 
 (defmacro with-tcp [[acceptor connector] & body]
@@ -102,6 +103,16 @@
     (with-open [s (b/pop c)]
       (.close c)
       (?true (b/open? s)))))
+
+(deftest connector-on-poppable-event
+  (with-tcp [a c]
+    (?true (e/emit-now! (b/on-poppable c) c))))
+
+(deftest acceptor-on-poppable-event
+  (with-open [a (tcp/acceptor "localhost" 12345)]
+    (?false (e/emit-now! (b/on-poppable a) a))
+    (with-open [c (tcp/connector "localhost" 12345)]
+      (?true (e/emit-now! (b/on-poppable a) a)))))
 
 ;;
 ;; Tcp sockets

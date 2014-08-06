@@ -4,17 +4,12 @@ import java.nio.channels.SelectableChannel
 
 trait Channel extends java.io.Closeable {
   def isOpen: Boolean
-  final def close: Unit = {
-    if(isOpen && onClose != null) onClose.emit(this)
-    _close
-  }
+  def close: Unit = _close
   protected def _close: Unit
 
   def requireOpen = if(!isOpen) throw new java.nio.channels.ClosedChannelException
 
   def update: Result = Result.NOTHING
-
-  def onClose: evil_ant.IEvent = null
 }
 
 trait ChannelLike extends Channel {
@@ -50,6 +45,8 @@ trait Source[SR <: Source[SR, T], T] extends Channel {
   }
 
   def onPoppable: evil_ant.ISignal = null
+
+  override def close { if(onPoppable != null) onPoppable.close; super.close }
 }
 
 trait Sink[SN <: Sink[SN, T], T] extends Channel {
@@ -70,6 +67,8 @@ trait Sink[SN <: Sink[SN, T], T] extends Channel {
   }
 
   def onPushable: evil_ant.ISignal = null
+
+  override def close { if(onPushable != null) onPushable.close; super.close }
 }
 
 trait SourceLike[SR <: SourceLike[SR, T], T] extends Source[SR, T] {

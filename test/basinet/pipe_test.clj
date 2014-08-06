@@ -102,14 +102,6 @@
 ;; Events
 ;;
 
-(deftest pipes-source-emits-onclose-on-close
-  (with-pipe [r w]
-    (let [actions (atom [])
-          h (e/handler ([e s] (swap! actions #(conj % [e s]))) (b/on-close r))]
-      (b/close r)
-      (?= @actions [[(b/on-close r) r]])
-      (?false (.isOpen (b/on-close r))))))
-
 (deftest pipes-source-isnt-poppalbe-by-default
   (with-pipe [r w]
     (?false (e/emit-now! (b/on-poppable r) r))))
@@ -127,5 +119,11 @@
   (with-pipe [r w]
     (while (b/try-push w (byte 0)))
     (?false (e/emit-now! (b/on-pushable w) w))))
-    
+
+(deftest pipes-on-poppable-and-on-pushable-closed-on-close
+  (with-pipe [r w]
+    (b/close r)
+    (b/close w)
+    (?false (.isOpen (b/on-pushable w)))
+    (?false (.isOpen (b/on-poppable r)))))
 

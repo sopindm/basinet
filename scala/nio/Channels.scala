@@ -15,8 +15,6 @@ class Channel(channel: JChannel) extends basinet.Channel {
   override def _close { if(isOpen) channel.close }
   override def isOpen = channel.isOpen
 
-  override val onClose = new evil_ant.Event(true)
-
   def _onPoppable = _asSelectable match {
     case Some(channel) => new evil_ant.SelectorSignal(channel, SelectionKey.OP_READ, false)
     case None => null
@@ -33,10 +31,11 @@ abstract class Source[T](channel: JChannel) extends Channel(channel)
   override def source = this
 }
 
+/*
 abstract class Sink[T](channel: JChannel) extends Channel(channel)
     with basinet.Sink[Sink[T], T] {
   override def sink = this
-}
+}*/
 
 class ByteSource(val channel: ReadableByteChannel)
     extends Channel(channel) with basinet.Source[ByteSource, Byte] {
@@ -51,7 +50,7 @@ class ByteSource(val channel: ReadableByteChannel)
     else None
   }
 
-  override def onPoppable = _onPoppable
+  override val onPoppable = _onPoppable
 }
 
 class ByteSink(val channel: WritableByteChannel)
@@ -63,7 +62,7 @@ class ByteSink(val channel: WritableByteChannel)
     ByteChannelWriter.convert(buffer, this).isUnderflow
   }
 
-  override def onPushable = _onPushable
+  override val onPushable = _onPushable
 }
 
 object Pipe {
@@ -159,6 +158,8 @@ class TcpAcceptor(channel: ServerSocketChannel)
 
   override def localAddress = Some(TcpAddress(channel.getLocalAddress))
   override def remoteAddress = None
+
+  override val onPoppable = new evil_ant.SelectorSignal(channel, SelectionKey.OP_ACCEPT, false)
 }
 
 class TcpConnector(channel: SocketChannel, remote: SocketAddress)
@@ -182,6 +183,8 @@ class TcpConnector(channel: SocketChannel, remote: SocketAddress)
     val address = channel.getRemoteAddress
     if(address != null) Some(TcpAddress(address)) else None
   }
+
+  override val onPoppable = new evil_ant.SelectorSignal(channel, SelectionKey.OP_CONNECT, false)
 }
 
 object ByteChannelReader
