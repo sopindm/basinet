@@ -4,8 +4,10 @@ import java.nio.channels.SelectableChannel
 
 trait Channel extends java.io.Closeable {
   def isOpen: Boolean
-  def close: Unit = _close
+  def close: Unit = { if(isOpen) onClose.emit(this); _close }
   protected def _close: Unit
+
+  def onClose: evil_ant.IEvent
 
   def requireOpen = if(!isOpen) throw new java.nio.channels.ClosedChannelException
 
@@ -16,6 +18,7 @@ trait ChannelLike extends Channel {
   private[this] var _isOpen = true
   override def isOpen = _isOpen
   override def _close { _isOpen = false }
+  override final val onClose = new evil_ant.Event(true)
 }
 
 trait Source[SR <: Source[SR, T], T] extends Channel {
@@ -44,7 +47,7 @@ trait Source[SR <: Source[SR, T], T] extends Channel {
     result
   }
 
-  def onPoppable: evil_ant.ISignal = null
+  def onPoppable: evil_ant.IEvent
 
   override def close { if(onPoppable != null) onPoppable.close; super.close }
 }
@@ -66,7 +69,7 @@ trait Sink[SN <: Sink[SN, T], T] extends Channel {
     result
   }
 
-  def onPushable: evil_ant.ISignal = null
+  def onPushable: evil_ant.IEvent
 
   override def close { if(onPushable != null) onPushable.close; super.close }
 }
@@ -89,6 +92,13 @@ trait PipeLike[SR <: Source[SR, T], SN <: Sink[SN, U], T, U] extends Pipe[SR, SN
 
   override def isOpen = pipeSource.isOpen || pipeSink.isOpen
   override def _close { pipeSource.close; pipeSink.close }
+  override final lazy val onClose = {
+    val event = new evil_ant.WhenEveryEvent
+    if(pipeSource.isOpen) pipeSource.onClose += event
+    if(pipeSink.isOpen) pipeSink.onClose += event
+
+    event
+  }
 
   override def push(value: U) = pipeSink.push(value)
   override def pushIn(value: U, milliseconds: Int) = pipeSink.pushIn(value, milliseconds)
@@ -102,6 +112,9 @@ trait PipeLike[SR <: Source[SR, T], SN <: Sink[SN, U], T, U] extends Pipe[SR, SN
   override def pushable = pipeSink.pushable
 
   override def update = pipeSource.update.merge(pipeSink.update)
+
+  override def onPoppable = pipeSource.onPoppable
+  override def onPushable = pipeSink.onPushable
 }
 
 class PipeOf[SR <: Source[SR, T], SN <: Sink[SN, U], T, U]

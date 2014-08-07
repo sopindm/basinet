@@ -1,6 +1,7 @@
 (ns basinet.buffer-test
   (:require [khazad-dum :refer :all]
-            [basinet :as b])
+            [basinet :as b]
+            [evil-ant :as e])
   (:import [java.nio.channels ClosedChannelException]
            [basinet Result]))
 
@@ -8,6 +9,23 @@
   (let [buffer (b/byte-buffer 10)]
     (dotimes [i 10] (b/push buffer (byte (* i i))))
     (dotimes [i 10] (?= (b/pop buffer) (byte (* i i))))))
+
+(deftest buffer-source-close
+  (let [buffer (b/byte-buffer 10)
+        actions (atom [])
+        handler (e/handler ([e s] (swap! actions #(conj % [e s]))) (b/on-close (b/source buffer)))]
+    (b/close (b/source buffer))
+    (?= @actions [[(b/on-close (b/source buffer)) (b/source buffer)]])
+    (?false (e/open? (b/on-close (b/source buffer))))))
+
+(deftest buffer-close
+  (let [b (b/byte-buffer 10)
+        actions (atom [])
+        handlers (e/handler ([e s] (swap! actions #(conj % [e s]))) (b/on-close b))]
+    (b/close (b/source b))
+    (b/close (b/sink b))
+    (?= @actions [[(b/on-close b) (b/sink b)]])
+    (?false (e/open? (b/on-close b)))))
 
 (deftest buffer-update
   (?= (b/update (b/byte-buffer 1)) basinet.Result/NOTHING))
@@ -101,7 +119,6 @@
 (deftest closing-buffer-sink-with-empty-source-closes-source
   (with-open [b (b/byte-buffer 1)]
     (b/close (b/sink b))
-    (b/update b)
     (?false (b/open? (b/source b))))
   (with-open [b (b/byte-buffer 1)]
     (b/push b (byte 100))
@@ -109,8 +126,30 @@
     (b/update b)
     (?true (b/open? (b/source b)))
     (b/pop b)
-    (b/update b)
     (?false (b/open? (b/source b)))))
+
+(deftest buffer-source-on-poppable-event
+  (with-open [b (b/byte-buffer 2)]
+    (let [actions (atom [])
+          handler (e/handler ([e s] (swap! actions #(conj % [e s]))) (b/on-poppable b))]
+      (b/push b (byte 10))
+      (?= @actions [[(b/on-poppable b) (b/source b)]])
+      (reset! actions [])
+      (b/push b (byte 10))
+      (?= @actions [])
+      (dotimes [i 2] (b/pop b))
+      (b/push b (byte 10))
+      (?= @actions [[(b/on-poppable b) (b/source b)]]))))
+
+(deftest buffer-sink-on-pushable-event
+  (with-open [b (b/byte-buffer 2)]
+    (let [actions (atom [])
+          handler (e/handler ([e s] (swap! actions #(conj % [e s]))) (b/on-pushable b))]
+      (b/push b (byte 10))
+      (b/push b (byte 10))
+      (?= @actions [])
+      (b/pop b)
+      (?= @actions [[(b/on-pushable b) (b/sink b)]]))))
 
 ;;
 ;; byte wires

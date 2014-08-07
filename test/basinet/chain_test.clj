@@ -1,5 +1,6 @@
 (ns basinet.chain-test
   (:require [khazad-dum :refer :all]
+            [evil-ant :as e]
             [basinet :as b]))
 
 (deftest making-chain
@@ -9,8 +10,8 @@
     (?true (instance? basinet.Channel chain))
     (?false (instance? basinet.Source chain))
     (?false (instance? basinet.Sink chain))
-    (dotimes [i 10] (b/push (b/sink p) (byte i)))
-    (?= (b/update chain) basinet.Result/OVERFLOW)
+    (dotimes [i 10] (?= (b/try-push (b/sink p) (byte i)) true))
+    (?true (e/emit-now! (b/on-poppable p) p))
     (dotimes [i 10] (?= (b/try-pop b) i))))
 
 (deftest when-chain-closes-source-and-sink-are-close-too
@@ -24,6 +25,7 @@
   (with-open [p (b/pipe)
               b (b/byte-buffer 10)
               c (b/chain1 p b)]
+    (b/push b (byte 10))
     (?true (b/open? c))
     (b/close p)
     (?true (b/open? c))
@@ -35,37 +37,56 @@
     (?true (b/open? (b/chain1 p b)))))
 
 ;;
-;; Updating chains
+;; Chain events
 ;;
 
-(deftest chain-update-is-underflow-if-some-result-is-underflow
-  (let [underflow-chain #(b/chain (b/object-buffer [1]) (b/object-buffer 2))]
-    (?true (b/underflow? (b/update (underflow-chain))))
-    (?true (b/underflow? (b/update (b/chain (underflow-chain) (b/object-buffer 10)))))
-    (?true (b/underflow? (b/update (b/chain (b/object-buffer (range 10)) (underflow-chain)))))))
+(deftest source-chain-onpoppable
+  (let [b1 (b/object-buffer 10)
+        b2 (b/object-buffer 10)]
+    (?= (b/on-poppable (b/chain (b/source b1) b2)) (b/on-poppable b2))))
 
-(deftest chain-update-if-overflow-if-some-result-if-overflow
-  (let [overflow-chain #(b/chain (b/object-buffer (range 10)) (b/object-buffer 1))]
-    (?true (b/overflow? (b/update (overflow-chain))))
-    (?true (b/overflow? (b/update (b/chain (overflow-chain) (b/object-buffer 1000)))))
-    (?true (b/overflow? (b/update (b/chain (b/object-buffer []) (overflow-chain)))))))
+(deftest sink-chain-onpushable
+  (let [b1 (b/object-buffer 5)
+        b2 (b/object-buffer 10)]
+    (?= (b/on-pushable (b/chain b1 (b/sink b2))) (b/on-pushable b1))))
+
+(deftest pipe-chain-onpoppable
+  (let [b (b/object-buffer 10)]
+    (?= (b/on-poppable (b/chain (b/object-buffer 10) b)) (b/on-poppable b))))
+
+(deftest pipe-chain-onpushable 
+  (let [b (b/object-buffer 10)]
+    (?= (b/on-pushable (b/chain b (b/object-buffer 10))) (b/on-pushable b))))
+
+(deftest chain-updates-using-events
+  (let [b1 (b/object-buffer 5)
+        b2 (b/object-buffer 1)
+        c (b/chain (b/source b1) (b/sink b2))]
+    (?= (b/try-push (b/sink b1) 123) true)
+    (?= (b/try-pop b2) 123)))
+    
+;;
+;; Updating chains
+;;
 
 (deftest update-with-closed-sink-closes-source
   (with-open [source (b/object-buffer 10)
               sink (b/object-buffer 10)
               chain (b/chain1 source sink)]
     (b/close sink)
-    (?= (b/update chain) basinet.Result/OVERFLOW)
     (?false (b/open? source))))
 
 (deftest update-with-closed-source-closes-sink
   (with-open [source (b/object-buffer (range 5))
-              sink (b/chain (b/object-buffer 10) (b/object-buffer (range 10)))
+              b1 (b/object-buffer (range 10))
+              sink (b/chain (b/object-buffer 10) b1)
               chain (b/chain source sink)]
     (b/close source)
-    (b/update chain)
     (?true (b/open? sink))
-    (?false (b/open? (b/sink sink)))))
+    (?false (b/open? (b/sink sink)))
+    (?= (repeatedly 10 #(b/pop sink)) (range 10))
+    (?= (repeatedly 5 #(b/pop sink)) (range 5))
+    (?false (b/open? sink))))
 
 ;;
 ;; Chain source/sinks/pipes
@@ -88,7 +109,6 @@
               sink (b/byte-buffer 10)
               chain (b/chain1 (b/source source) sink)]
     (dotimes [i 10] (b/push source (byte (- i 5))))
-    (b/update chain)
     (?= (b/source chain) (b/source sink))
     (?true (b/poppable chain))
     (dotimes [i 10] (?= (pop-somehow chain i) (- i 5)))))
@@ -99,7 +119,6 @@
               chain (b/chain1 source (b/sink sink))]
     (?= (b/sink chain) (b/sink source))
     (dotimes [i 10] (push-somehow chain i (byte i)))
-    (?= (b/update chain) basinet.Result/UNDERFLOW)
     (?true (b/pushable chain))
     (dotimes [i 10] (?= (b/try-pop sink) (byte i)))))
 
@@ -111,7 +130,6 @@
     (?= (b/sink chain) (b/sink source))
     (?false (b/poppable chain))
     (dotimes [i 5] (push-somehow chain i (byte (nth "hello" i))))
-    (b/update chain)
     (dotimes [i 5] (?= (pop-somehow chain i) (nth "hello" i)))))
 
 (deftest pushable-for-complex-chain
@@ -152,7 +170,7 @@
                              (b/byte-buffer 1)
                              (b/char-buffer 10))]
     (let [chars "hello, cruel hypocrite world!!!"]
-      (doseq [c chars] (b/push chain c))
+      (doseq [c chars] (?= (b/try-push chain c) true))
       (doseq [c chars] (?= (b/pop chain) c)))))
 
 (deftest long-chain-with-wire
@@ -161,8 +179,8 @@
                              (b/char-buffer 10) :by (b/line-writer)
                              (b/object-buffer 1))]
     (let [text ["hi" "hello" "hullo"]]
-      (dotimes [i (count text)] (b/push chain (nth text i)))
-      (dotimes [i (count text)] (?= (b/pop chain) (nth text i))))))
+      (dotimes [i (count text)] (?= (b/try-push chain (nth text i)) true))
+      (dotimes [i (count text)] (?= (b/try-pop chain) (nth text i))))))
 
 (deftest closing-source-chain
   (with-open [pipe (b/pipe)

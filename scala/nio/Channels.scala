@@ -15,6 +15,8 @@ class Channel(channel: JChannel) extends basinet.Channel {
   override def _close { if(isOpen) channel.close }
   override def isOpen = channel.isOpen
 
+  override def onClose = new evil_ant.Event(true)
+
   def _onPoppable = _asSelectable match {
     case Some(channel) => new evil_ant.SelectorSignal(channel, SelectionKey.OP_READ, false)
     case None => null

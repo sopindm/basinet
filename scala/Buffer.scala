@@ -76,10 +76,16 @@ trait BufferSourceLike[SR <: BufferSourceLike[SR, SN, T], SN <: BufferSinkLike[S
   def absoluteGet(index: Int): T
   override def get(index: Int) = { requireOpen; absoluteGet(indexToPosition(index)) }
 
-  override def _close = { super._close; sink.close }
+  override def _close = { super._close; if(sink.isOpen) sink.close }
 
-  def _drop(n: Int) = super.drop(n)
-  def _expand(n: Int) = super.expand(n)
+  override val onPoppable = new evil_ant.Event(false)
+
+  def _drop(n: Int) = { super.drop(n); if(!poppable && !sink.isOpen) close }
+  def _expand(n: Int) { 
+    val becamePoppable = size == 0 && n > 0 && isOpen
+    super.expand(n)
+    if(becamePoppable) onPoppable.emit(this)
+  }
 
   override def drop(n: Int) = { _drop(n); sink._expand(n) }
   override def expand(n: Int) = { _expand(n); sink._drop(n) }
@@ -87,11 +93,6 @@ trait BufferSourceLike[SR <: BufferSourceLike[SR, SN, T], SN <: BufferSinkLike[S
   override def compact(begin: Int, end: Int) {
     copy(begin, capacity - compactionThreshold + begin, min(end - begin, compactionThreshold - begin))
     super.compact(begin, end)
-  }
-
-  override def update = { 
-    if(!poppable && !sink.isOpen) close
-    super.update
   }
 }
 
@@ -114,6 +115,10 @@ trait BufferSinkLike[SR <: BufferSourceLike[SR, SN, T], SN <: BufferSinkLike[SR,
   def absoluteSet(index: Int, value: T): Unit
   override def set(index: Int, value: T) { requireOpen; absoluteSet(indexToPosition(index), value) }
 
+  override def _close = { super._close; if(!source.poppable && source.isOpen) source.close }
+
+  override val onPushable = new evil_ant.Event(false)
+
   def _drop(n: Int) {
     val begin = this.begin
 
@@ -123,7 +128,11 @@ trait BufferSinkLike[SR <: BufferSourceLike[SR, SN, T], SN <: BufferSinkLike[SR,
       copy(capacity - compactionThreshold + begin, begin, min(n, compactionThreshold - begin))
   }
 
-  def _expand(n: Int) = super.expand(n)
+  def _expand(n: Int) { 
+    val becamePushable = size == 0 && n > 0 && isOpen
+    super.expand(n)
+    if(becamePushable) onPushable.emit(this)
+  }
 
   override def drop(n: Int) { _drop(n); source._expand(n) }
   override def expand(n: Int) = { _expand(n); source._drop(n) }
