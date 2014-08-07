@@ -17,8 +17,6 @@
 ;; Basic stream functions
 ;;
 
-(defn update [^basinet.Channel channel] (.update channel))
-
 (defn pushable [^basinet.Sink sink] (.pushable sink))
 
 (defn push [^basinet.Sink sink item] (.push sink item))

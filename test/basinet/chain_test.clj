@@ -110,6 +110,7 @@
               chain (b/chain1 (b/source source) sink)]
     (dotimes [i 10] (b/push source (byte (- i 5))))
     (?= (b/source chain) (b/source sink))
+    (?= (e/emit-now! (b/on-poppable (b/source source)) source) true)
     (?true (b/poppable chain))
     (dotimes [i 10] (?= (pop-somehow chain i) (- i 5)))))
 
@@ -166,7 +167,7 @@
 (deftest long-chain
   (with-open [chain (b/chain (b/char-buffer 10)
                              (b/byte-buffer 1)
-                             (b/pipe)
+                             (b/object-buffer 10)
                              (b/byte-buffer 1)
                              (b/char-buffer 10))]
     (let [chars "hello, cruel hypocrite world!!!"]
@@ -188,7 +189,5 @@
               char-buffer (b/char-buffer 1000)
               chain (b/chain (b/source pipe) byte-buffer char-buffer
                              :by (b/line-writer) (b/object-buffer 1))]
-    (b/close pipe)
-    (?true (b/open? chain))
-    (b/update chain)
+    (b/close (b/source pipe))
     (?false (b/open? chain))))

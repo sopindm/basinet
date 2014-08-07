@@ -22,13 +22,11 @@
   (let [b (b/byte-buffer 10)
         actions (atom [])
         handlers (e/handler ([e s] (swap! actions #(conj % [e s]))) (b/on-close b))]
-    (b/close (b/source b))
+    (b/push b (byte 10))
     (b/close (b/sink b))
-    (?= @actions [[(b/on-close b) (b/sink b)]])
+    (b/close (b/source b))
+    (?= @actions [[(b/on-close b) (b/source b)]])
     (?false (e/open? (b/on-close b)))))
-
-(deftest buffer-update
-  (?= (b/update (b/byte-buffer 1)) basinet.Result/NOTHING))
 
 (deftest pushing-to-full-buffer
   (let [buffer (b/byte-buffer 1)]
@@ -123,7 +121,6 @@
   (with-open [b (b/byte-buffer 1)]
     (b/push b (byte 100))
     (b/close (b/sink b))
-    (b/update b)
     (?true (b/open? (b/source b)))
     (b/pop b)
     (?false (b/open? (b/source b)))))

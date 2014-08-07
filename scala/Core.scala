@@ -4,14 +4,12 @@ import java.nio.channels.SelectableChannel
 
 trait Channel extends java.io.Closeable {
   def isOpen: Boolean
-  def close: Unit = { if(isOpen) onClose.emit(this); _close }
+  def close: Unit = { _close; if(onClose.isOpen) onClose.emit(this) }
   protected def _close: Unit
 
   def onClose: evil_ant.IEvent
 
   def requireOpen = if(!isOpen) throw new java.nio.channels.ClosedChannelException
-
-  def update: Result = Result.NOTHING
 }
 
 trait ChannelLike extends Channel {
@@ -31,7 +29,7 @@ trait Source[SR <: Source[SR, T], T] extends Channel {
   def pop: T = {
     var result = tryPop
 
-    while(result.isEmpty) { update; result = tryPop }
+    while(result.isEmpty) { result = tryPop }
     result.get
   }
 
@@ -40,7 +38,6 @@ trait Source[SR <: Source[SR, T], T] extends Channel {
     val startTime = System.currentTimeMillis
 
     while(result.isEmpty && System.currentTimeMillis < startTime + milliseconds && poppable) {
-      update
       result = tryPop
     }
 
@@ -58,12 +55,11 @@ trait Sink[SN <: Sink[SN, T], T] extends Channel {
   def pushable: Boolean = isOpen
   def tryPush(value: T): Boolean
 
-  def push(value: T): Unit = while(!tryPush(value)) update
+  def push(value: T): Unit = while(!tryPush(value)) {}
   def pushIn(value: T, milliseconds: Int): Boolean = {
     val startTime = System.currentTimeMillis
     var result = false
     while(!result && (System.currentTimeMillis - startTime) < milliseconds && pushable) {
-      update
       result = tryPush(value)
     }
     result
@@ -110,8 +106,6 @@ trait PipeLike[SR <: Source[SR, T], SN <: Sink[SN, U], T, U] extends Pipe[SR, SN
 
   override def poppable = pipeSource.poppable
   override def pushable = pipeSink.pushable
-
-  override def update = pipeSource.update.merge(pipeSink.update)
 
   override def onPoppable = pipeSource.onPoppable
   override def onPushable = pipeSink.onPushable

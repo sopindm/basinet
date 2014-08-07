@@ -2,21 +2,15 @@ package basinet
 
 class Chain[SR <: Source[SR, T], SN <: Sink[SN, U], T, U]
   (source: Source[SR, T], sink: Sink[SN, U], wire: Wire[SR, SN]) extends Channel {
+  self =>
+
   override def isOpen = source.isOpen || sink.isOpen
-  override def _close { source.close; sink.close }
-
-  override def onClose = new evil_ant.Event(true)
-
-  override def update: basinet.Result = {
-    val sourceState = source.update
-    val state = wire.convert(source, sink)
-    if(!source.isOpen) sink.sink.close
-
-    val sinkState = sink.update
-    if(!sink.isOpen) source.close
-
-    sourceState.merge(state).merge(sinkState)
+  override def _close {
+    if(source.isOpen) source.close
+    if(sink.isOpen) sink.close
   }
+
+  override val onClose = new evil_ant.Event(true)
 
   class Handler extends evil_ant.Handler {
     override def absorb(e: evil_ant.IEvent, s: AnyRef) = updateEvents
@@ -26,19 +20,19 @@ class Chain[SR <: Source[SR, T], SN <: Sink[SN, U], T, U]
     if(source.isOpen) {
       source.onClose += new evil_ant.Handler {
         override def absorb(e: evil_ant.IEvent, s: AnyRef) = {
-          sink.sink.close
-          if(!sink.isOpen) close
+          if(sink.sink.isOpen) sink.sink.close
+          if(!sink.isOpen) self.close
         }
       }
 
       source.onPoppable += new Handler
     }
 
-    if(sink.isOpen) { sink.onClose += onClose
+    if(sink.isOpen) {
       sink.onClose += new evil_ant.Handler {
         override def absorb(e: evil_ant.IEvent, s: AnyRef) = {
-          source.source.close
-          if(!source.isOpen) close
+          if(source.source.isOpen) source.source.close
+          if(!source.isOpen) self.close
         }
       }
 
