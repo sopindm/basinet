@@ -84,7 +84,7 @@ trait BufferSourceLike[SR <: BufferSourceLike[SR, SN, T], SN <: BufferSinkLike[S
   def _expand(n: Int) { 
     val becamePoppable = size == 0 && n > 0 && isOpen
     super.expand(n)
-    if(becamePoppable) onPoppable.emit(this)
+    if(becamePoppable) onPoppable.emit
   }
 
   override def drop(n: Int) = { _drop(n); sink._expand(n) }
@@ -131,7 +131,7 @@ trait BufferSinkLike[SR <: BufferSourceLike[SR, SN, T], SN <: BufferSinkLike[SR,
   def _expand(n: Int) { 
     val becamePushable = size == 0 && n > 0 && isOpen
     super.expand(n)
-    if(becamePushable) onPushable.emit(this)
+    if(becamePushable) onPushable.emit
   }
 
   override def drop(n: Int) { _drop(n); source._expand(n) }

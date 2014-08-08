@@ -106,13 +106,13 @@
 
 (deftest connector-on-poppable-event
   (with-tcp [a c]
-    (?true (e/emit-now! (b/on-poppable c) c))))
+    (?true (e/emit-now! (b/on-poppable c)))))
 
 (deftest acceptor-on-poppable-event
   (with-open [a (tcp/acceptor "localhost" 12345)]
-    (?false (e/emit-now! (b/on-poppable a) a))
+    (?false (e/emit-now! (b/on-poppable a)))
     (with-open [c (tcp/connector "localhost" 12345)]
-      (?true (e/emit-now! (b/on-poppable a) a)))))
+      (?true (e/emit-now! (b/on-poppable a))))))
 
 ;;
 ;; Tcp sockets

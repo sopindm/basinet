@@ -13,13 +13,13 @@ class Chain[SR <: Source[SR, T], SN <: Sink[SN, U], T, U]
   override val onClose = new evil_ant.Event(true)
 
   class Handler extends evil_ant.Handler {
-    override def absorb(e: evil_ant.IEvent, s: AnyRef) = updateEvents
+    override def absorb(e: evil_ant.IEvent) = updateEvents
   }
 
   private[this] final def setupEvents {
     if(source.isOpen) {
       source.onClose += new evil_ant.Handler {
-        override def absorb(e: evil_ant.IEvent, s: AnyRef) = {
+        override def absorb(e: evil_ant.IEvent) = {
           if(sink.sink.isOpen) sink.sink.close
           if(!sink.isOpen) self.close
         }
@@ -30,7 +30,7 @@ class Chain[SR <: Source[SR, T], SN <: Sink[SN, U], T, U]
 
     if(sink.isOpen) {
       sink.onClose += new evil_ant.Handler {
-        override def absorb(e: evil_ant.IEvent, s: AnyRef) = {
+        override def absorb(e: evil_ant.IEvent) = {
           if(source.source.isOpen) source.source.close
           if(!source.isOpen) self.close
         }

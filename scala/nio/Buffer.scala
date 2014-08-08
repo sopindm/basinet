@@ -126,8 +126,8 @@ class CharsetDecoder(charset: Charset)
     val (bytes, chars) = (from.buffer.duplicate, to.buffer.duplicate)
     val result = decoder.decode(bytes, chars, false)
 
-    from.drop(bytes.position - bytesAt)
     to.drop(chars.position - charsAt)
+    from.drop(bytes.position - bytesAt)
 
     if(result == CoderResult.UNDERFLOW) {
       if(from.size == (bytes.limit - bytes.position))
@@ -157,8 +157,8 @@ class CharsetEncoder(charset: Charset)
     val (chars, bytes) = (from.buffer.duplicate, to.buffer.duplicate)
     val result = encoder.encode(chars, bytes, false)
 
-    from.drop(chars.position - charsAt)
     to.drop(bytes.position - bytesAt)
+    from.drop(chars.position - charsAt)
 
     if(result == CoderResult.UNDERFLOW) {
       if(from.size == (chars.limit - chars.position))

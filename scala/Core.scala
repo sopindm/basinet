@@ -4,7 +4,7 @@ import java.nio.channels.SelectableChannel
 
 trait Channel extends java.io.Closeable {
   def isOpen: Boolean
-  def close: Unit = { _close; if(onClose.isOpen) onClose.emit(this) }
+  def close: Unit = { _close; if(onClose.isOpen) onClose.emit }
   protected def _close: Unit
 
   def onClose: evil_ant.IEvent

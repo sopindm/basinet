@@ -11,7 +11,7 @@
     (?false (instance? basinet.Source chain))
     (?false (instance? basinet.Sink chain))
     (dotimes [i 10] (?= (b/try-push (b/sink p) (byte i)) true))
-    (?true (e/emit-now! (b/on-poppable p) p))
+    (?true (e/emit-now! (b/on-poppable p)))
     (dotimes [i 10] (?= (b/try-pop b) i))))
 
 (deftest when-chain-closes-source-and-sink-are-close-too
@@ -64,6 +64,16 @@
         c (b/chain (b/source b1) (b/sink b2))]
     (?= (b/try-push (b/sink b1) 123) true)
     (?= (b/try-pop b2) 123)))
+
+(comment
+(deftest chain-handler-chechs-status-after-all-update
+  (let [b1 (b/byte-buffer (byte-array (map #(byte (+ % (int \0))) (range 10))))
+        b2 (b/char-buffer 5)
+        b3 (b/byte-buffer 10)
+        c (b/chain (b/chain b1 b2) b3)]
+    (println (b/size (b/source b1)) (b/size (b/sink b1)))
+    (println (b/size (b/source b2)) (b/size (b/sink b2)))
+    (println (b/size (b/source b3)) (b/size (b/sink b3))))))
     
 ;;
 ;; Updating chains
@@ -110,7 +120,7 @@
               chain (b/chain1 (b/source source) sink)]
     (dotimes [i 10] (b/push source (byte (- i 5))))
     (?= (b/source chain) (b/source sink))
-    (?= (e/emit-now! (b/on-poppable (b/source source)) source) true)
+    (?= (e/emit-now! (b/on-poppable (b/source source))) true)
     (?true (b/poppable chain))
     (dotimes [i 10] (?= (pop-somehow chain i) (- i 5)))))
 

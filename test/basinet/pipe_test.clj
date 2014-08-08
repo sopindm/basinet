@@ -104,21 +104,21 @@
 
 (deftest pipes-source-isnt-poppalbe-by-default
   (with-pipe [r w]
-    (?false (e/emit-now! (b/on-poppable r) r))))
+    (?false (e/emit-now! (b/on-poppable r)))))
 
 (deftest pipes-source-poppable-with-has-something
   (with-pipe [r w]
     (b/push w (byte 10))
-    (?true (e/emit-now! (b/on-poppable r) r))))
+    (?true (e/emit-now! (b/on-poppable r)))))
 
 (deftest pipes-sink-is-pushable-by-default
   (with-pipe [r w]
-    (?true (e/emit-now! (b/on-pushable w) w))))
+    (?true (e/emit-now! (b/on-pushable w)))))
 
 (deftest pipes-sink-isnt-pushable-when-overflown
   (with-pipe [r w]
     (while (b/try-push w (byte 0)))
-    (?false (e/emit-now! (b/on-pushable w) w))))
+    (?false (e/emit-now! (b/on-pushable w)))))
 
 (deftest pipes-on-poppable-and-on-pushable-closed-on-close
   (with-pipe [r w]
