@@ -1,10 +1,15 @@
 (ns basinet.line-wires-test
-  (:require [khazad-dum :refer :all]
+  (:require [khazad-dum :refer :all :exclude [deftest]]
             [basinet :as b]
             [basinet.buffer-test :refer [?convert=]]
             [evil-ant :as e])
   (:import [java.nio.channels ClosedChannelException]
            [basinet Result]))
+
+(defmacro deftest [name & body]
+  `(khazad-dum/deftest ~name
+     (binding [b/*signal-set* (b/signal-set)]
+       ~@body)))
 
 (deftest line-writer-readers-chars-and-makes-strings
   (with-open [cb (b/char-buffer "hello\nhi\nagain!!!\n")
@@ -60,55 +65,64 @@
       (?convert= [ob cb lr] Result/OVERFLOW)
       (?chars= cb "hello!!!"))))
 
-(comment
 (deftest simple-line-source-test
   (with-open [pipe (b/pipe)
               source (b/line-source (b/source pipe))]
     (doseq [c "hello\n"] (b/push pipe (byte c)))
-    (e/emit-now! (b/on-poppable pipe))
-    (?= (b/pop source) "hello")))
+    (b/emit-now!)
+    (b/emit-now!)
+    (?= (b/try-pop source) "hello")))
 
 (deftest simple-line-sink-test
   (with-open [pipe (b/pipe)
               sink (b/line-sink (b/sink pipe))]
     (b/push sink "hello")
+    (b/emit-now!)
     (doseq [c "hello\n"] (?= (b/try-pop pipe) (int c)))))
 
 (deftest line-sink-with-lines-option
   (with-open [pipe (b/pipe)
-              source (b/line-source pipe)
+              source (b/line-source pipe :lines 5)
               sink (b/line-sink pipe  :lines 5)]
     (dotimes [i 5] (?= (b/try-push sink "hello") true))
-    (e/emit-now! (b/on-poppable pipe))
-    (dotimes [i 5] (?= (b/pop source) "hello"))))
+    (b/emit-now!)
+    (b/emit-now!)
+    (b/emit-now!)
+    (dotimes [i 5] (?= (b/try-pop source) "hello"))))
     
 (deftest line-source-with-lines-option
   (with-open [pipe (b/pipe)
               source (b/line-source pipe :lines 5)
               sink (b/line-sink pipe :lines 5)]
     (dotimes [i 5] (b/push sink "hello"))
-    (e/emit-now! (b/on-poppable pipe))
+    (b/emit-now!)
+    (b/emit-now!)
+    (b/emit-now!)
     (dotimes [i 5] (?= (b/try-pop source) "hello"))))
 
 (deftest line-source-with-encoding-option
   (with-open [pipe (b/pipe)
               source (b/line-source pipe :charset "UTF-16LE")]
     (doseq [b (map byte [58 4 10 0])] (b/push pipe b))
-    (e/emit-now! (b/on-poppable pipe))
-    (?= (b/pop source) (str (char 1082)))))
+    (b/emit-now!)
+    (b/emit-now!)
+    (?= (b/try-pop source) (str (char 1082)))))
 
 (deftest line-sink-with-encoding-option
   (with-open [pipe (b/pipe)
               sink (b/line-sink pipe :charset "UTF-16LE")]
     (b/push sink (str (char 1082)))
-    (e/emit-now! (b/on-poppable pipe))
-    (doseq [b (map byte [58 4 10 0])] (?= (b/pop pipe) b))))
+    (b/emit-now!)
+    (b/emit-now!)
+    (doseq [b (map byte [58 4 10 0])] (?= (b/try-pop pipe) b))))
 
 (deftest line-socket-test
   (with-open [pipe (b/pipe)
               socket (b/line-socket pipe :lines 2)]
     (b/try-push socket "hi")
     (b/try-push socket "Hello!!!")
-    (e/emit-now! (b/on-poppable pipe))
+    (b/emit-now!)
+    (b/emit-now!)
+    (b/emit-now!)
     (?= (b/try-pop socket) "hi")
-    (?= (b/try-pop socket) "Hello!!!"))))
+    (?= (b/try-pop socket) "Hello!!!")))
