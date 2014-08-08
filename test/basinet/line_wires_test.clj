@@ -60,6 +60,7 @@
       (?convert= [ob cb lr] Result/OVERFLOW)
       (?chars= cb "hello!!!"))))
 
+(comment
 (deftest simple-line-source-test
   (with-open [pipe (b/pipe)
               source (b/line-source (b/source pipe))]
@@ -110,4 +111,4 @@
     (b/try-push socket "Hello!!!")
     (e/emit-now! (b/on-poppable pipe))
     (?= (b/try-pop socket) "hi")
-    (?= (b/try-pop socket) "Hello!!!")))
+    (?= (b/try-pop socket) "Hello!!!"))))

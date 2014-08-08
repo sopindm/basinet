@@ -1,5 +1,6 @@
 (ns basinet
-  (:require [basinet.scala :as scala])
+  (:require [basinet.scala :as scala]
+            [evil-ant :as e])
   (:refer-clojure :exclude [pop read drop get set])
   (:import [java.nio ByteBuffer CharBuffer]))
 
@@ -131,13 +132,19 @@
 ;; Chains
 ;;
 
+(def ^:dynamic *signal-set* nil)
+
+(defn emit! [] (e/emit! *signal-set*))
+(defn emit-in! [millis] (e/emit-in! *signal-set* millis))
+(defn emit-now! [] (e/emit-now! *signal-set*))
+
 (defn chain1
   ([from to wire] (let [source? (instance? basinet.Pipe to)
                         sink? (instance? basinet.Pipe from)]
-                    (cond (and sink? source?) (basinet.ChainPipe. from to wire)
-                          sink? (basinet.ChainSink. from to wire)
-                          source? (basinet.ChainSource. from to wire)
-                          :else (basinet.Chain. from to wire))))
+                    (cond (and sink? source?) (basinet.ChainPipe. from to wire *signal-set*)
+                          sink? (basinet.ChainSink. from to wire *signal-set*)
+                          source? (basinet.ChainSource. from to wire *signal-set*)
+                          :else (basinet.Chain. from to wire *signal-set*))))
   ([from to] (chain1 from to (converter from to))))
 
 (defn chain [& channels]
@@ -174,3 +181,10 @@
 
 (defn on-poppable [channel] (.onPoppable channel))
 (defn on-pushable [channel] (.onPushable channel))
+
+(defn register [channel event-set] (.register channel event-set))
+
+(defn signal-set ([] (e/signal-set))
+  ([& channels] (reduce #(do (register %2 %1) %1) (signal-set) channels)))
+
+

@@ -78,13 +78,13 @@ trait BufferSourceLike[SR <: BufferSourceLike[SR, SN, T], SN <: BufferSinkLike[S
 
   override def _close = { super._close; if(sink.isOpen) sink.close }
 
-  override val onPoppable = new evil_ant.Event(false)
+  override val onPoppable = new evil_ant.TriggerSignal(false)
 
   def _drop(n: Int) = { super.drop(n); if(!poppable && !sink.isOpen) close }
   def _expand(n: Int) { 
     val becamePoppable = size == 0 && n > 0 && isOpen
     super.expand(n)
-    if(becamePoppable) onPoppable.emit
+    if(becamePoppable) onPoppable.touch
   }
 
   override def drop(n: Int) = { _drop(n); sink._expand(n) }
@@ -93,6 +93,10 @@ trait BufferSourceLike[SR <: BufferSourceLike[SR, SN, T], SN <: BufferSinkLike[S
   override def compact(begin: Int, end: Int) {
     copy(begin, capacity - compactionThreshold + begin, min(end - begin, compactionThreshold - begin))
     super.compact(begin, end)
+  }
+
+  override def register(set: evil_ant.MultiSignalSet) {
+    set += onPoppable
   }
 }
 
@@ -117,7 +121,7 @@ trait BufferSinkLike[SR <: BufferSourceLike[SR, SN, T], SN <: BufferSinkLike[SR,
 
   override def _close = { super._close; if(!source.poppable && source.isOpen) source.close }
 
-  override val onPushable = new evil_ant.Event(false)
+  override val onPushable = new evil_ant.TriggerSignal(false)
 
   def _drop(n: Int) {
     val begin = this.begin
@@ -131,11 +135,15 @@ trait BufferSinkLike[SR <: BufferSourceLike[SR, SN, T], SN <: BufferSinkLike[SR,
   def _expand(n: Int) { 
     val becamePushable = size == 0 && n > 0 && isOpen
     super.expand(n)
-    if(becamePushable) onPushable.emit
+    if(becamePushable) onPushable.touch
   }
 
   override def drop(n: Int) { _drop(n); source._expand(n) }
   override def expand(n: Int) = { _expand(n); source._drop(n) }
+
+  override def register(set: evil_ant.MultiSignalSet) {
+    set += onPushable
+  }
 }
 
 package any {

@@ -1,7 +1,12 @@
 (ns basinet.chain-test
-  (:require [khazad-dum :refer :all]
+  (:require [khazad-dum :refer :all :exclude [deftest]]
             [evil-ant :as e]
             [basinet :as b]))
+
+(defmacro deftest [name & body]
+  `(khazad-dum/deftest ~name
+     (binding [b/*signal-set* (b/signal-set)]
+       ~@body)))
 
 (deftest making-chain
   (with-open [p (b/pipe)
@@ -58,22 +63,16 @@
   (let [b (b/object-buffer 10)]
     (?= (b/on-pushable (b/chain b (b/object-buffer 10))) (b/on-pushable b))))
 
-(deftest chain-updates-using-events
+(deftest chain-updates-using-signals
   (let [b1 (b/object-buffer 5)
         b2 (b/object-buffer 1)
+        n (atom 0)
         c (b/chain (b/source b1) (b/sink b2))]
     (?= (b/try-push (b/sink b1) 123) true)
+    (b/emit-now!)
     (?= (b/try-pop b2) 123)))
 
-(comment
-(deftest chain-handler-chechs-status-after-all-update
-  (let [b1 (b/byte-buffer (byte-array (map #(byte (+ % (int \0))) (range 10))))
-        b2 (b/char-buffer 5)
-        b3 (b/byte-buffer 10)
-        c (b/chain (b/chain b1 b2) b3)]
-    (println (b/size (b/source b1)) (b/size (b/sink b1)))
-    (println (b/size (b/source b2)) (b/size (b/sink b2)))
-    (println (b/size (b/source b3)) (b/size (b/sink b3))))))
+
     
 ;;
 ;; Updating chains
@@ -94,8 +93,9 @@
     (b/close source)
     (?true (b/open? sink))
     (?false (b/open? (b/sink sink)))
-    (?= (repeatedly 10 #(b/pop sink)) (range 10))
-    (?= (repeatedly 5 #(b/pop sink)) (range 5))
+    (?= (seq (repeatedly 10 #(b/try-pop sink))) (range 10))
+    (b/emit!)
+    (?= (seq (repeatedly 5 #(b/try-pop sink))) (range 5))
     (?false (b/open? sink))))
 
 ;;
@@ -120,7 +120,7 @@
               chain (b/chain1 (b/source source) sink)]
     (dotimes [i 10] (b/push source (byte (- i 5))))
     (?= (b/source chain) (b/source sink))
-    (?= (e/emit-now! (b/on-poppable (b/source source))) true)
+    (b/emit-now!)
     (?true (b/poppable chain))
     (dotimes [i 10] (?= (pop-somehow chain i) (- i 5)))))
 
@@ -131,6 +131,7 @@
     (?= (b/sink chain) (b/sink source))
     (dotimes [i 10] (push-somehow chain i (byte i)))
     (?true (b/pushable chain))
+    (b/emit-now!)
     (dotimes [i 10] (?= (b/try-pop sink) (byte i)))))
 
 (deftest pipe-chain
@@ -141,6 +142,7 @@
     (?= (b/sink chain) (b/sink source))
     (?false (b/poppable chain))
     (dotimes [i 5] (push-somehow chain i (byte (nth "hello" i))))
+    (b/emit-now!)
     (dotimes [i 5] (?= (pop-somehow chain i) (nth "hello" i)))))
 
 (deftest pushable-for-complex-chain
@@ -165,32 +167,38 @@
 (deftest pushing-to-chain
   (let [chain (b/chain (b/object-buffer (range 1)) (b/object-buffer 2))]
     (?true (b/push-in chain 42 1000))
-    (b/push chain 142)
+    (b/emit-now!)
+    (?true (b/push-in chain 142 1000))
+    (b/emit-now!)
     (?false (b/push-in chain 242 1000))))
 
 (deftest popping-from-chain
   (let [chain (b/chain (b/object-buffer (range 2)) (b/object-buffer 1))]
+    (b/emit-now!)
     (?= (b/pop chain) 0)
+    (b/emit-now!)
     (?= (b/pop-in chain 1000) 1)
     (?= (b/pop-in chain 1000) nil)))
 
 (deftest long-chain
-  (with-open [chain (b/chain (b/char-buffer 10)
+  (with-open [chain (b/chain (b/char-buffer 100)
                              (b/byte-buffer 1)
                              (b/object-buffer 10)
                              (b/byte-buffer 1)
-                             (b/char-buffer 10))]
+                             (b/char-buffer 100))]
     (let [chars "hello, cruel hypocrite world!!!"]
       (doseq [c chars] (?= (b/try-push chain c) true))
-      (doseq [c chars] (?= (b/pop chain) c)))))
+      (b/emit!)
+      (doseq [c chars] (?= (b/try-pop chain) c)))))
 
 (deftest long-chain-with-wire
   (with-open [chain (b/chain (b/object-buffer 10) :by (b/object-buffer-reader)
                              (b/object-buffer 5) :by (b/line-reader)
                              (b/char-buffer 10) :by (b/line-writer)
-                             (b/object-buffer 1))]
+                             (b/object-buffer 3))]
     (let [text ["hi" "hello" "hullo"]]
       (dotimes [i (count text)] (?= (b/try-push chain (nth text i)) true))
+      (b/emit!)
       (dotimes [i (count text)] (?= (b/try-pop chain) (nth text i))))))
 
 (deftest closing-source-chain

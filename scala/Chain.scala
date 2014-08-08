@@ -1,7 +1,8 @@
 package basinet
 
 class Chain[SR <: Source[SR, T], SN <: Sink[SN, U], T, U]
-  (source: Source[SR, T], sink: Sink[SN, U], wire: Wire[SR, SN]) extends Channel {
+  (source: Source[SR, T], sink: Sink[SN, U], wire: Wire[SR, SN], set: evil_ant.MultiSignalSet)
+    extends Channel {
   self =>
 
   override def isOpen = source.isOpen || sink.isOpen
@@ -16,7 +17,14 @@ class Chain[SR <: Source[SR, T], SN <: Sink[SN, U], T, U]
     override def absorb(e: evil_ant.IEvent) = updateEvents
   }
 
+  override def register(set: evil_ant.MultiSignalSet) {
+    if(source.isOpen) source.register(set)
+    if(sink.isOpen) sink.register(set)
+  }
+
   private[this] final def setupEvents {
+    register(set)
+
     if(source.isOpen) {
       source.onClose += new evil_ant.Handler {
         override def absorb(e: evil_ant.IEvent) = {
@@ -55,8 +63,8 @@ class Chain[SR <: Source[SR, T], SN <: Sink[SN, U], T, U]
 }
 
 class ChainSource[SR <: Source[SR, T], SN <: Sink[SN, U], SRI <: Source[SRI, V], T, U, V]
-  (_source: Source[SR, T], _sink: Pipe[SRI, SN, V, U], wire: Wire[SR, SN])
-    extends Chain[SR, SN, T, U](_source, _sink, wire) with Source[SRI, V] {
+  (_source: Source[SR, T], _sink: Pipe[SRI, SN, V, U], wire: Wire[SR, SN], set: evil_ant.MultiSignalSet)
+    extends Chain[SR, SN, T, U](_source, _sink, wire, set) with Source[SRI, V] {
   override def source = _sink.source
 
   override def poppable = _sink.poppable | _source.poppable
@@ -66,8 +74,8 @@ class ChainSource[SR <: Source[SR, T], SN <: Sink[SN, U], SRI <: Source[SRI, V],
 }
 
 class ChainSink[SR <: Source[SR, T], SN <: Sink[SN, U], SNI <: Sink[SNI, V], T, U, V]
-  (_source: Pipe[SR, SNI, T, V], _sink: Sink[SN, U], wire: Wire[SR, SN])
-    extends Chain[SR, SN, T, U](_source, _sink, wire) with Sink[SNI, V] {
+  (_source: Pipe[SR, SNI, T, V], _sink: Sink[SN, U], wire: Wire[SR, SN], set: evil_ant.MultiSignalSet)
+    extends Chain[SR, SN, T, U](_source, _sink, wire, set) with Sink[SNI, V] {
   override def sink = _source.sink
 
   override def pushable = _source.pushable || _sink.pushable
@@ -78,8 +86,11 @@ class ChainSink[SR <: Source[SR, T], SN <: Sink[SN, U], SNI <: Sink[SNI, V], T, 
 
 class ChainPipe[SR <: Source[SR, T], SN <: Sink[SN, U], SRI <: Source[SRI, V], SNI <: Sink[SNI, W],
                 T, U, V, W]
-  (_source: Pipe[SR, SNI, T, W], _sink: Pipe[SRI, SN, V, U], wire: Wire[SR, SN])
-    extends Chain[SR, SN, T, U](_source, _sink, wire) with Pipe[SRI, SNI, V, W] {
+  (_source: Pipe[SR, SNI, T, W],
+   _sink: Pipe[SRI, SN, V, U],
+   wire: Wire[SR, SN],
+   set: evil_ant.MultiSignalSet)
+    extends Chain[SR, SN, T, U](_source, _sink, wire, set) with Pipe[SRI, SNI, V, W] {
   override def sink = _source.sink
   override def source = _sink.source
 

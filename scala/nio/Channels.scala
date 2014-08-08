@@ -31,6 +31,7 @@ class Channel(channel: JChannel) extends basinet.Channel {
 abstract class Source[T](channel: JChannel) extends Channel(channel)
     with basinet.Source[Source[T], T] {
   override def source = this
+  override def register(set: evil_ant.MultiSignalSet) { set += onPoppable }
 }
 
 /*
@@ -53,6 +54,7 @@ class ByteSource(val channel: ReadableByteChannel)
   }
 
   override val onPoppable = _onPoppable
+  override def register(set: evil_ant.MultiSignalSet) { set += onPoppable }
 }
 
 class ByteSink(val channel: WritableByteChannel)
@@ -65,6 +67,7 @@ class ByteSink(val channel: WritableByteChannel)
   }
 
   override val onPushable = _onPushable
+  override def register(set: evil_ant.MultiSignalSet) { set += onPushable }
 }
 
 object Pipe {

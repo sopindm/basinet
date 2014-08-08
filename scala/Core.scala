@@ -10,6 +10,8 @@ trait Channel extends java.io.Closeable {
   def onClose: evil_ant.IEvent
 
   def requireOpen = if(!isOpen) throw new java.nio.channels.ClosedChannelException
+
+  def register(signalSet: evil_ant.MultiSignalSet): Unit = {}
 }
 
 trait ChannelLike extends Channel {
@@ -44,7 +46,7 @@ trait Source[SR <: Source[SR, T], T] extends Channel {
     result
   }
 
-  def onPoppable: evil_ant.IEvent
+  def onPoppable: evil_ant.ISignal
 
   override def close { if(onPoppable != null) onPoppable.close; super.close }
 }
@@ -65,7 +67,7 @@ trait Sink[SN <: Sink[SN, T], T] extends Channel {
     result
   }
 
-  def onPushable: evil_ant.IEvent
+  def onPushable: evil_ant.ISignal
 
   override def close { if(onPushable != null) onPushable.close; super.close }
 }
@@ -109,6 +111,11 @@ trait PipeLike[SR <: Source[SR, T], SN <: Sink[SN, U], T, U] extends Pipe[SR, SN
 
   override def onPoppable = pipeSource.onPoppable
   override def onPushable = pipeSink.onPushable
+
+  override def register(set: evil_ant.MultiSignalSet) {
+    pipeSource.register(set)
+    pipeSink.register(set)
+  }
 }
 
 class PipeOf[SR <: Source[SR, T], SN <: Sink[SN, U], T, U]

@@ -128,24 +128,30 @@
 (deftest buffer-source-on-poppable-event
   (with-open [b (b/byte-buffer 2)]
     (let [actions (atom [])
-          handler (e/handler ([e] (swap! actions #(conj % e))) (b/on-poppable b))]
+          handler (e/handler ([e] (swap! actions #(conj % e))) (b/on-poppable b))
+          s (b/signal-set b)]
       (b/push b (byte 10))
+      (e/emit-now! s)
       (?= @actions [(b/on-poppable b)])
       (reset! actions [])
       (b/push b (byte 10))
       (?= @actions [])
       (dotimes [i 2] (b/pop b))
       (b/push b (byte 10))
+      (e/emit-now! s)
       (?= @actions [(b/on-poppable b)]))))
 
 (deftest buffer-sink-on-pushable-event
   (with-open [b (b/byte-buffer 2)]
     (let [actions (atom [])
-          handler (e/handler ([e] (swap! actions #(conj % e))) (b/on-pushable b))]
+          handler (e/handler ([e] (swap! actions #(conj % e))) (b/on-pushable b))
+          s (b/signal-set b)]
       (b/push b (byte 10))
       (b/push b (byte 10))
+      (e/emit-now! s)
       (?= @actions [])
       (b/pop b)
+      (e/emit-now! s)
       (?= @actions [(b/on-pushable b)]))))
 
 ;;
